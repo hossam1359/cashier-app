@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1c2b33">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="الدفتر">
+    <title>دفتر الحسابات اليومي الشامل</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" href="icon-192.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Markazi+Text:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        /* ============================================================
+           هوية "الدفتر" — ورق دافئ + حبر كحلي + لمسة نحاسية
+           تصميم جديد بالكامل — من غير أي لمس لمنطق الحسابات
+           ============================================================ */
+        :root {
+            --ink: #1c2b33;
+            --ink-2: #253945;
+            --paper: #fbf8f1;
+            --paper-soft: #f3efe3;
+            --rule: #e3dac2;
+            --brass: #b08a2e;
+            --brass-light: #d4af5a;
+            --brass-dark: #8a6c22;
+            --caf-color: #256d74;
+            --baz-color: #64712f;
+            --stf-color: #a8611f;
+            --exp-color: #9c332b;
+            --debt-color: #8a6224;
+            --net-green: #2f7a4f;
+            --text-main: #232323;
+            --text-soft: #6b6459;
+            --btn-radius: 14px;
+            --shadow: 0 10px 24px rgba(28,43,51,0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: var(--paper-soft);
+            background-image:
+                radial-gradient(circle at 15% 0%, rgba(176,138,46,0.06), transparent 40%),
+                radial-gradient(circle at 100% 20%, rgba(37,109,116,0.05), transparent 35%);
+            color: var(--text-main);
+            margin: 0; padding: 12px;
+            padding-bottom: calc(100px + env(safe-area-inset-bottom));
+            padding-top: calc(12px + env(safe-area-inset-top));
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        h1, h2, h3, h4, .ledger-font { font-family: 'Markazi Text', 'Cairo', serif; }
+
+        /* ===== شريط علوي: العنوان + التاريخ + حالة المزامنة ===== */
+        .app-header {
+            max-width: 800px; margin: 0 auto 16px auto;
+            background: linear-gradient(160deg, var(--ink), var(--ink-2));
+            color: var(--paper); border-radius: 18px;
+            padding: 18px 20px; box-shadow: var(--shadow);
+            position: relative; overflow: hidden;
+        }
+        .app-header::after {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(135deg, rgba(212,175,90,0.05) 0 2px, transparent 2px 22px);
+            pointer-events: none;
+        }
+        .app-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .app-title { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: 0.3px; }
+        .app-date { font-size: 13px; color: #cdd6da; margin-top: 4px; font-weight: 600; }
+        .header-actions { display: flex; align-items: center; gap: 10px; }
+        .icon-btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+            color: var(--paper); width: 38px; height: 38px; border-radius: 10px;
+            font-size: 17px; display: flex; align-items: center; justify-content: center;
+        }
+        .sync-pill {
+            display: inline-flex; align-items: center; gap: 7px;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+            padding: 6px 12px; border-radius: 999px; font-size: 12px; margin-top: 12px; font-weight: 600;
+        }
+        #sync-dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa1a6; flex-shrink: 0; transition: background 0.3s; }
+        #shift-status-text {
+            display: block; margin-top: 8px; font-size: 12.5px; color: #dcd2b8; font-weight: 600;
+            border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 8px;
+        }
+
+        /* شريط التعديل */
+        .edit-mode-banner {
+            display: none; max-width: 800px; margin: 0 auto 15px auto;
+            background: linear-gradient(135deg, var(--brass-light), var(--brass));
+            color: #2b2107;
+            text-align: center; padding: 15px; border-radius: var(--btn-radius);
+            box-shadow: 0 4px 15px rgba(176, 138, 46, 0.3);
+        }
+        .edit-mode-banner button { margin: 5px; padding: 10px 20px; border-radius: 10px; border: none; font-family: 'Cairo'; font-weight: bold; cursor: pointer; font-size: 14px; }
+
+        /* الحاويات الرئيسية */
+        .notebook {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(100%, 1fr));
+            gap: 15px; max-width: 800px; margin: 0 auto 15px auto;
+        }
+
+        @media (min-width: 768px) {
+            .notebook { grid-template-columns: repeat(3, 1fr); max-width: 1200px; }
+        }
+
+        .column {
+            background: var(--paper); padding: 18px;
+            border-radius: 18px; box-shadow: var(--shadow);
+            display: flex; flex-direction: column; border-top: 4px solid #ccc;
+            position: relative;
+        }
+        .col-caf { border-top-color: var(--caf-color); }
+        .col-baz { border-top-color: var(--baz-color); }
+        .col-stf { border-top-color: var(--stf-color); }
+
+        h3 { text-align: center; padding-bottom: 14px; margin: 0 0 14px 0; border-bottom: 1px dashed var(--rule); font-weight: 700; font-size: 21px; }
+
+        /* المدخلات */
+        .input-row { display: flex; gap: 10px; margin-bottom: 12px; }
+        input, select {
+            padding: 13px 12px; border: 1.5px solid var(--rule); border-radius: 12px;
+            font-size: 15px; font-family: 'Cairo'; transition: 0.2s;
+            background: var(--paper-soft); min-height: 46px;
+        }
+        input:focus, select:focus { border-color: var(--brass); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(176, 138, 46, 0.15); }
+        .price-input { width: 35%; text-align: center; font-weight: bold; }
+        .note-input, .caf-select { width: 65%; }
+        .caf-qty { width: 35%; text-align: center; }
+
+        /* الأزرار */
+        .action-buttons-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        button { transition: 0.15s; cursor: pointer; border: none; font-family: 'Cairo'; font-weight: 700; -webkit-tap-highlight-color: transparent; }
+        button:active { transform: scale(0.95); }
+        .action-buttons-row button { flex: 1; padding: 11px 6px; color: white; border-radius: 10px; font-size: 13px; min-height: 42px; }
+        .add-btn { width: 100%; padding: 15px; margin-bottom: 12px; color: white; border-radius: var(--btn-radius); font-size: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.12); min-height: 50px; }
+
+        /* القوائم — سطور دفتر منقطة */
+        .entries {
+            flex-grow: 1; min-height: 150px; max-height: 320px; overflow-y: auto;
+            list-style: none; padding: 0; margin: 0; border-radius: 12px; background: #fff;
+            border: 1px solid var(--rule);
+        }
+        .entries li {
+            padding: 13px 12px; border-bottom: 1px dotted var(--rule); font-size: 15px; font-weight: 600;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .entries li:last-child { border-bottom: none; }
+        .item-details { display: flex; align-items: center; gap: 12px; width: 85%;}
+        .paid-check { appearance: none; -webkit-appearance: none; width: 24px; height: 24px; min-width: 24px; border-radius: 50%; border: 2px solid var(--rule); position: relative; cursor: pointer; background: #fff; }
+        .paid-check:checked { background: var(--net-green); border-color: var(--net-green); }
+        .paid-check:checked::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: bold; }
+        .del { color: var(--exp-color); cursor: pointer; font-size: 26px; padding: 0 8px; line-height: 1; }
+
+        /* المجاميع الفرعية */
+        .total-box { margin-top: 12px; padding: 14px; text-align: center; font-weight: 700; font-size: 18px; border-radius: 12px; font-family: 'Markazi Text', 'Cairo'; }
+        .total-caf { background: rgba(37, 109, 116, 0.09); color: var(--caf-color); }
+        .total-baz { background: rgba(100, 113, 47, 0.09); color: var(--baz-color); }
+        .total-stf { background: rgba(168, 97, 31, 0.09); color: var(--stf-color); }
+
+        /* الإجمالي النهائي */
+        .grand-total-banner {
+            max-width: 800px; margin: 22px auto; background: linear-gradient(160deg, var(--ink), var(--ink-2)); color: white;
+            padding: 24px 20px; border-radius: 20px; box-shadow: var(--shadow);
+            border: 1px solid rgba(212,175,90,0.25);
+        }
+        .summary-row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        .summary-box { background: rgba(255,255,255,0.07); padding: 15px; border-radius: 12px; flex: 1; min-width: 100px; text-align: center; font-size: 13.5px;}
+        .summary-box span { font-size: 25px; font-weight: bold; display: block; margin-top: 8px; font-family: 'Markazi Text'; }
+        .net-box { background: linear-gradient(135deg, var(--net-green), #3f9a63); box-shadow: 0 4px 15px rgba(47, 122, 79, 0.3);}
+
+        /* أزرار التحكم السفلية (الشيفت واليوم) */
+        .footer-panel {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: rgba(251,248,241,0.92); backdrop-filter: blur(12px);
+            padding: 14px 14px calc(14px + env(safe-area-inset-bottom)) 14px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.06);
+            display: flex; gap: 12px; justify-content: center; z-index: 100;
+            box-sizing: border-box; border-top: 1px solid var(--rule);
+        }
+        .footer-panel button {
+            padding: 15px; font-size: 15.5px; border-radius: 14px; flex: 1; max-width: 350px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.12); color: white; min-height: 50px;
+        }
+        .btn-shift { background: linear-gradient(135deg, var(--brass-light), var(--brass)); color: #2b2107; }
+        .btn-end { background: linear-gradient(135deg, #c0453a, var(--exp-color)); }
+
+        /* نوافذ Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(28,43,51,0.55); z-index: 1000; backdrop-filter: blur(4px);}
+        .modal-content { background: var(--paper); margin: 15vh auto; padding: 24px; width: 90%; max-width: 350px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.25); }
+        .close-modal { width: 100%; padding: 14px; background: var(--paper-soft); color: var(--text-soft); border-radius: 12px; margin-top: 15px; font-size: 15px; border: 1px solid var(--rule); }
+
+        #history-container h3 { font-size: 22px; text-align: right; color: var(--ink); border: none; padding-bottom: 0; }
+    </style>
+</head>
+<body onload="initApp()">
+
+    <div class="app-header">
+        <div class="app-header-top">
+            <div>
+                <h1 class="app-title">📒 دفتر الحسابات اليومي</h1>
+                <div class="app-date" id="header-date"></div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="openSettingsModal()" title="الإعدادات">⚙️</button>
+            </div>
+        </div>
+        <div class="sync-pill"><span id="sync-dot"></span><span id="sync-text">جاري التحقق من المزامنة...</span></div>
+        <span id="shift-status-text"></span>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content" style="text-align:right;">
+            <h3 style="margin-top:0; color: var(--ink);">⚙️ إعدادات الربط بين التليفونات</h3>
+            <p style="font-size:13.5px; color:var(--text-soft); line-height:1.7;">
+                "كود المحل" هو المفتاح اللي بيربط كل التليفونات ببعض. اكتب نفس الكود بالظبط في كل تليفون عاوز تربطه، وهيتشارك فيهم نفس البيانات أول ما يكون فيه نت.
+            </p>
+            <input type="text" id="shop-code-input" placeholder="اكتب كود المحل هنا" style="width:100%; margin-bottom:12px;">
+            <button class="add-btn" style="background:var(--brass); margin:0 0 10px 0;" onclick="saveShopCodeFromModal()">حفظ وإعادة الربط</button>
+            <button class="close-modal" onclick="document.getElementById('settingsModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+
+
+    <div id="receipt-render-container" style="position: absolute; top: -9999px; left: -9999px;"></div>
+    <datalist id="baz-items"><option value="حلويات"><option value="مناديل"><option value="عصير"><option value="فشار"><option value="شامبو"></datalist>
+    <datalist id="stf-names"></datalist>
+
+    <div class="edit-mode-banner" id="edit-mode-banner">
+        <div>⚠️ وضع تعديل السجل: <span id="edit-date-display"></span></div>
+        <div style="margin-top: 12px;">
+            <button style="background: #fff; color: #e67e22;" onclick="saveEditedDay()">حفظ التعديلات</button>
+            <button style="background: #c0392b; color: white;" onclick="cancelEdit()">إلغاء</button>
+        </div>
+    </div>
+
+    <div class="notebook">
+        <div class="column col-caf">
+            <h3 style="color: var(--caf-color);">☕ كافتيريا</h3>
+            <div class="input-row">
+                <select id="caf-item-select" class="caf-select"></select>
+                <input type="number" id="caf-quantity" class="caf-qty" value="1" min="1" placeholder="العدد" onkeypress="handleCafEnter(event)">
+            </div>
+            <div class="action-buttons-row">
+                <button style="background: #2ecc71;" onclick="addCustomCafItem()">صنف+</button>
+                <button style="background: #3498db;" onclick="openSortModal('caf')">ترتيب</button>
+                <button style="background: #e74c3c;" onclick="deleteCafItem()">مسح</button>
+            </div>
+            <button class="add-btn" style="background: var(--caf-color);" onclick="addCafEntry()">إضافة للكافتيريا</button>
+            <ul class="entries" id="list-caf"></ul>
+            <div class="total-box total-caf">المحصل: <span id="total-caf">0</span></div>
+        </div>
+
+        <div class="column col-baz">
+            <h3 style="color: var(--baz-color);">🍫 بازار</h3>
+            <div class="input-row">
+                <input type="number" id="price-baz" class="price-input" placeholder="السعر" onkeypress="handleEntryEnter(event, 'baz')">
+                <input type="text" id="note-baz" class="note-input" list="baz-items" placeholder="الصنف (اختياري)" onkeypress="handleEntryEnter(event, 'baz')">
+            </div>
+            <button class="add-btn" style="background: var(--baz-color);" onclick="addEntry('baz')">إضافة للبازار</button>
+            <ul class="entries" id="list-baz"></ul>
+            <div class="total-box total-baz">المحصل: <span id="total-baz">0</span></div>
+        </div>
+
+        <div class="column col-stf">
+            <h3 style="color: var(--stf-color);">👥 اصطف</h3>
+            <div class="input-row">
+                <input type="number" id="price-stf" class="price-input" placeholder="السعر" onkeypress="handleEntryEnter(event, 'stf')">
+                <input type="text" id="note-stf" class="note-input" list="stf-names" placeholder="الاسم" onkeypress="handleEntryEnter(event, 'stf')">
+            </div>
+            <div class="action-buttons-row">
+                <button style="background: #2ecc71;" onclick="addStaffName()">اسم+</button>
+                <button style="background: #3498db;" onclick="openSortModal('stf')">ترتيب</button>
+                <button style="background: #e74c3c;" onclick="deleteStaffName()">مسح</button>
+            </div>
+            <button class="add-btn" style="background: var(--stf-color);" onclick="addEntry('stf')">إضافة للاصطف</button>
+            <ul class="entries" id="list-stf"></ul>
+            <div class="total-box total-stf">المحصل: <span id="total-stf">0</span></div>
+        </div>
+    </div>
+
+    <div class="notebook">
+        <div class="column" style="border-top-color: #f1c40f; background: #fffcf2;">
+            <h3 style="color: #f39c12;">📌 الآجل المستمر</h3>
+            <div class="input-row">
+                <input type="number" id="price-unpaid-direct" class="price-input" placeholder="المبلغ">
+                <input type="text" id="note-unpaid-direct" class="note-input" list="stf-names" placeholder="اسم الشخص">
+            </div>
+            <button class="add-btn" style="background:#f39c12;" onclick="addDirectUnpaid()">إضافة آجل</button>
+            <ul class="entries" id="list-unpaid-persistent"></ul>
+            <div style="margin-top: 15px; font-weight: bold; color: #d35400; text-align: center;">إجمالي الديون: <span id="total-unpaid-sum">0</span> ج</div>
+        </div>
+
+        <div class="column" style="border-top-color: var(--exp-color); background: #fff5f5;">
+            <h3 style="color: var(--exp-color);">💸 المصروفات</h3>
+            <div class="input-row">
+                <input type="number" id="price-exp" class="price-input" placeholder="المبلغ" onkeypress="handleExpEnter(event)">
+                <input type="text" id="note-exp" class="note-input" placeholder="السبب..." onkeypress="handleExpEnter(event)">
+            </div>
+            <button class="add-btn" style="background:var(--exp-color);" onclick="addExpense()">إضافة مصروف</button>
+            <ul class="entries" id="list-exp"></ul>
+        </div>
+    </div>
+
+    <div class="grand-total-banner">
+        <div class="summary-row">
+            <div class="summary-box">الإيرادات<span id="grand-income" style="color: #f1c40f;">0</span></div>
+            <div class="summary-box">المصروفات<span id="grand-expenses" style="color: #ff7675;">0</span></div>
+            <div class="summary-box net-box">الصافي بالدرج<span id="net-total">0</span></div>
+        </div>
+    </div>
+
+    <div class="footer-panel" id="normal-footer">
+        <button class="btn-shift" onclick="handoverShift()">🤝 تسليم الشيفت</button>
+        <button class="btn-end" onclick="endDay()">🛑 إنهاء اليوم</button>
+    </div>
+
+    <div style="max-width: 800px; margin: 20px auto; padding: 10px;">
+        <h3 style="text-align: right; color: #2c3e50;">📅 سجل الأيام والشيفتات</h3>
+        <div id="history-container" style="display: grid; gap: 15px;"></div>
+    </div>
+
+    <div id="qrModal" class="modal">
+        <div class="modal-content" style="text-align: center;">
+            <h3 style="color: #25D366; margin-top: 0;">📱 امسح بالكاميرا</h3>
+            <div id="qr-container" style="display: flex; justify-content: center; margin: 15px 0;"></div>
+            <button class="close-modal" onclick="document.getElementById('qrModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+
+    <div id="sortModal" class="modal">
+        <div class="modal-content">
+            <h3 id="sortModalTitle" style="margin-top: 0; color: var(--caf-color);">ترتيب القائمة</h3>
+            <ul id="sort-list" style="list-style:none; padding:0; max-height:250px; overflow-y:auto;"></ul>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="add-btn" style="background: #27ae60; margin: 0;" onclick="saveSort()">حفظ</button>
+                <button class="close-modal" style="margin: 0;" onclick="closeSortModal()">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let totals = { caf: 0, baz: 0, stf: 0 };
+        let expensesTotal = 0;
+        let persistentUnpaid = [];
+        let staffNames = [];
+        let editingMode = false; let editingIndex = -1; let editingDate = "";
+        let defaultCafMenu = { "قهوه": 22, "شاي": 15, "مياه": 7, "نسكافية": 40, "قهوه حليب": 35, "اسبرسو": 30 };
+        let cafMenu = {}; let currentSortType = '';
+
+        function initApp() { loadCafMenu(); loadStaffNames(); loadUnpaidDebts(); loadActiveState(); loadHistory(); }
+
+        function loadStaffNames() { staffNames = JSON.parse(localStorage.getItem('staffNamesData')) || []; renderStaffList(); }
+        function renderStaffList() { let d = document.getElementById('stf-names'); d.innerHTML = ''; staffNames.forEach(n => d.appendChild(new Option(n, n))); }
+        function addStaffName() { let n = prompt("الاسم:"); if(n && !staffNames.includes(n.trim())){ staffNames.push(n.trim()); localStorage.setItem('staffNamesData', JSON.stringify(staffNames)); renderStaffList(); } }
+        function deleteStaffName() { let n = document.getElementById('note-stf').value || prompt("الاسم للحذف:"); let i = staffNames.indexOf(n); if(i > -1){ staffNames.splice(i, 1); localStorage.setItem('staffNamesData', JSON.stringify(staffNames)); renderStaffList(); } }
+
+        function loadCafMenu() { cafMenu = JSON.parse(localStorage.getItem('cafMenuData')) || {...defaultCafMenu}; renderCafDropdown(); }
+        function renderCafDropdown() { let s = document.getElementById('caf-item-select'); s.innerHTML = ''; for (let i in cafMenu) s.options.add(new Option(`${i} (${cafMenu[i]} ج)`, i)); }
+        function addCustomCafItem() { let n = prompt("اسم الصنف:"); if(!n) return; let p = parseFloat(prompt("السعر:")); if(p>0){ cafMenu[n]=p; localStorage.setItem('cafMenuData', JSON.stringify(cafMenu)); renderCafDropdown(); } }
+        function deleteCafItem() { let n = document.getElementById('caf-item-select').value; if(n && confirm("مسح؟")){ delete cafMenu[n]; localStorage.setItem('cafMenuData', JSON.stringify(cafMenu)); renderCafDropdown(); } }
+
+        function handleCafEnter(e) { if (e.key === 'Enter') addCafEntry(); }
+        function addCafEntry() { 
+            let n = document.getElementById('caf-item-select').value; let q = parseInt(document.getElementById('caf-quantity').value);
+            if(n && q>0){ appendEntryToList('caf', cafMenu[n]*q, `${n} x${q}`); document.getElementById('caf-quantity').value = 1; saveActiveState(); }
+        }
+
+        function handleEntryEnter(e, c) { if (e.key === 'Enter') addEntry(c); }
+        function addEntry(c) {
+            let pInp = document.getElementById('price-'+c), nInp = document.getElementById('note-'+c);
+            let p = parseFloat(pInp.value), n = nInp.value.trim(); if(isNaN(p) || p<=0) return;
+            
+            if (c === 'stf' && n !== "") {
+                for (let li of document.querySelectorAll('#list-stf li')) {
+                    if (!li.querySelector('.paid-check').checked && li.getAttribute('data-note') === n) {
+                        let newP = parseFloat(li.getAttribute('data-price')) + p;
+                        li.setAttribute('data-price', newP); li.querySelector('.price-val').innerText = newP;
+                        pInp.value = ''; nInp.value = ''; recalculateAllTotals(); saveActiveState(); return;
+                    }
+                }
+            }
+            appendEntryToList(c, p, n); pInp.value = ''; nInp.value = ''; pInp.focus(); saveActiveState();
+        }
+
+        function appendEntryToList(c, p, n, fPaid=false) {
+            let l = document.getElementById('list-'+c), li = document.createElement('li');
+            li.setAttribute('data-price', p); li.setAttribute('data-note', n);
+            let chk = fPaid || c !== 'stf' ? 'checked="checked"' : '', sty = chk ? 'text-decoration:line-through;color:#bdc3c7;' : 'color:#2c3e50;';
+            li.innerHTML = `<div class="item-details"><input type="checkbox" class="paid-check" onchange="togglePaid(this, '${c}')" ${chk}><span class="item-text" style="${sty}"><span class="price-val">${p}</span> ${n?`(${n})`:''}</span></div><span class="del" onclick="removeEntry(this)">×</span>`;
+            l.appendChild(li); recalculateAllTotals();
+        }
+
+        function togglePaid(cb, c) { let t = cb.closest('li').querySelector('.item-text'); cb.checked ? (t.style.textDecoration="line-through", t.style.color="#bdc3c7", cb.setAttribute('checked','checked')) : (t.style.textDecoration="none", t.style.color="#2c3e50", cb.removeAttribute('checked')); recalculateAllTotals(); saveActiveState(); }
+        function removeEntry(el) { if(confirm('حذف؟')){ el.closest('li').remove(); recalculateAllTotals(); saveActiveState(); } }
+
+        function handleExpEnter(e) { if(e.key === 'Enter') addExpense(); }
+        function addExpense() { let p = parseFloat(document.getElementById('price-exp').value), n = document.getElementById('note-exp').value; if(p>0){ let l = document.getElementById('list-exp'); l.innerHTML += `<li data-price="${p}" data-note="${n}"><div class="item-details"><span class="item-text" style="color:#e74c3c;">- <span class="price-val">${p}</span> ${n?`(${n})`:''}</span></div><span class="del" onclick="removeEntry(this)">×</span></li>`; document.getElementById('price-exp').value=''; document.getElementById('note-exp').value=''; recalculateAllTotals(); saveActiveState(); } }
+
+        function recalculateAllTotals() {
+            totals = {caf:0, baz:0, stf:0}; expensesTotal = 0;
+            ['caf','baz','stf'].forEach(c => document.querySelectorAll(`#list-${c} li`).forEach(li => { let p = parseFloat(li.getAttribute('data-price'))||0, cb = li.querySelector('.paid-check'); if(!cb || cb.checked) totals[c]+=p; }));
+            document.querySelectorAll('#list-exp li').forEach(li => expensesTotal += parseFloat(li.getAttribute('data-price'))||0);
+            updateTotalsDisplay();
+        }
+        function updateTotalsDisplay() { document.getElementById('total-caf').innerText = totals.caf; document.getElementById('total-baz').innerText = totals.baz; document.getElementById('total-stf').innerText = totals.stf; let i = totals.caf+totals.baz+totals.stf; document.getElementById('grand-income').innerText = i; document.getElementById('grand-expenses').innerText = expensesTotal; document.getElementById('net-total').innerText = i - expensesTotal; }
+
+        function loadUnpaidDebts() { persistentUnpaid = JSON.parse(localStorage.getItem('persistentUnpaidDebts')) || []; renderUnpaidDebts(); }
+        function saveUnpaidDebts() { localStorage.setItem('persistentUnpaidDebts', JSON.stringify(persistentUnpaid)); renderUnpaidDebts(); }
+        function renderUnpaidDebts() { let l = document.getElementById('list-unpaid-persistent'), t=0; l.innerHTML=''; persistentUnpaid.forEach((d,i) => { t+=d.amount; l.innerHTML+=`<li><div class="item-details"><button onclick="payUnpaidDebt(${i})" style="background:#27ae60;color:white;border-radius:6px;padding:6px 12px;border:none;font-family:'Cairo';font-weight:bold;">سداد</button><span class="item-text"><b>${d.name}</b>: <span style="color:#e74c3c;">${d.amount}</span> ج</span></div><span class="del" onclick="deleteUnpaidDebt(${i})">×</span></li>`;}); document.getElementById('total-unpaid-sum').innerText = t; }
+        function addDirectUnpaid() { let p = parseFloat(document.getElementById('price-unpaid-direct').value), n = document.getElementById('note-unpaid-direct').value.trim(); if(p>0 && n){ let e = persistentUnpaid.find(x=>x.name===n); e?e.amount+=p:persistentUnpaid.push({name:n,amount:p}); saveUnpaidDebts(); } }
+        function payUnpaidDebt(i) { let d=persistentUnpaid[i]; appendEntryToList('stf',d.amount,d.name+" (سداد)",true); persistentUnpaid.splice(i,1); saveUnpaidDebts(); }
+        function deleteUnpaidDebt(i) { if(confirm("حذف؟")) { persistentUnpaid.splice(i,1); saveUnpaidDebts(); } }
+
+        function saveActiveState() { if(editingMode) return; localStorage.setItem('activeDayData', JSON.stringify({cafList:document.getElementById('list-caf').innerHTML, bazList:document.getElementById('list-baz').innerHTML, stfList:document.getElementById('list-stf').innerHTML, expList:document.getElementById('list-exp').innerHTML})); }
+        function loadActiveState() { let s=JSON.parse(localStorage.getItem('activeDayData')); if(s){ ['caf','baz','stf','exp'].forEach(c=>document.getElementById('list-'+c).innerHTML = s[c+"List"]||''); ['caf','baz','stf'].forEach(c=>document.querySelectorAll(`#list-${c} li`).forEach(li=>{ let cb = li.querySelector('.paid-check'); if(cb){ cb.checked = cb.hasAttribute('checked'); cb.onchange = function(){togglePaid(this,c);}; } })); recalculateAllTotals(); } }
+        function clearWorkspace() { ['caf','baz','stf','exp'].forEach(c=>document.getElementById('list-'+c).innerHTML=''); recalculateAllTotals(); }
+
+        function getRecordObj(dateStr, type) { return { date: dateStr, type: type, caf: totals.caf, baz: totals.baz, stf: totals.stf, income: totals.caf+totals.baz+totals.stf, expenses: expensesTotal, net: (totals.caf+totals.baz+totals.stf)-expensesTotal, cafList: document.getElementById('list-caf').innerHTML, bazList: document.getElementById('list-baz').innerHTML, stfList: document.getElementById('list-stf').innerHTML, expList: document.getElementById('list-exp').innerHTML }; }
+
+        function handoverShift() {
+            if(confirm('هل تريد استخراج تقرير تسليم شيفت؟ (لن يتم تصفير الدفتر، سيكمل الشيفت القادم عليه)')) {
+                let now = new Date(); let ds = now.toLocaleDateString('ar-EG') + " " + now.toLocaleTimeString('ar-EG');
+                let history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+                history.push(getRecordObj(ds + " (تسليم شيفت)", "shift"));
+                localStorage.setItem('shopHistory', JSON.stringify(history));
+                loadHistory(); alert("تم حفظ تقرير الشيفت في السجل.");
+            }
+        }
+
+        function endDay() {
+            if(confirm('هل تريد إنهاء اليوم وتأكيد الترحيل وتصفير الدفتر؟')) {
+                document.querySelectorAll('#list-stf li').forEach(li => { let cb = li.querySelector('.paid-check'); if(cb && !cb.checked){ let n = li.getAttribute('data-note')||"بدون اسم", p = parseFloat(li.getAttribute('data-price'))||0; if(p>0){ let e = persistentUnpaid.find(d=>d.name===n); e?e.amount+=p:persistentUnpaid.push({name:n,amount:p}); } } });
+                saveUnpaidDebts();
+                let now = new Date(); let ds = now.toLocaleDateString('ar-EG') + " " + now.toLocaleTimeString('ar-EG');
+                let history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+                history.push(getRecordObj(ds + " (تقفيل يومي)", "day"));
+                localStorage.setItem('shopHistory', JSON.stringify(history));
+                clearWorkspace(); saveActiveState(); loadHistory(); alert("تم إنهاء اليوم وتصفير الدفتر!");
+            }
+        }
+
+        function loadHistory() {
+            let history = JSON.parse(localStorage.getItem('shopHistory')) || []; let c = document.getElementById('history-container'); c.innerHTML='';
+            history.slice().reverse().forEach((r, idx) => {
+                let origIdx = history.length - 1 - idx;
+                let bg = r.type === "shift" ? "#fff9e6" : "#ffffff";
+                let border = r.type === "shift" ? "5px solid #f1c40f" : "5px solid #2ecc71";
+                
+                c.innerHTML += `
+                    <div style="background:${bg}; padding:15px; border-radius:12px; border-right:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                        <h4 style="margin:0 0 10px 0; color:#2c3e50;">${r.date}</h4>
+                        <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; font-size:14px;">
+                            <span>إيرادات: <b style="color:#27ae60">${r.income}</b></span> | <span>مصروفات: <b style="color:#e74c3c">${r.expenses}</b></span> | <span style="font-weight:bold; font-size:16px;">الصافي: ${r.net}</span>
+                        </div>
+                        <div style="margin-top:15px; display:flex; gap:8px; flex-wrap:wrap;">
+                            <button onclick="showWhatsAppQR(${origIdx})" style="background:#25D366; color:white; padding:8px 12px; border-radius:8px; flex:1;">QR واتساب</button>
+                            ${r.type === "day" ? `<button onclick="restoreHistoryItem(${origIdx})" style="background:#f39c12; color:white; padding:8px 12px; border-radius:8px; flex:1;">تعديل</button>` : ''}
+                            <button onclick="deleteHistoryItem(${origIdx})" style="background:#e74c3c; color:white; padding:8px 12px; border-radius:8px; flex:1;">حذف</button>
+                        </div>
+                    </div>`;
+            });
+        }
+        
+        function showWhatsAppQR(i) { let r = (JSON.parse(localStorage.getItem('shopHistory')))[i]; let t = `📅 *${r.date}*\n☕ كافتيريا: ${r.caf}\n🍫 بازار: ${r.baz}\n👥 اصطف: ${r.stf}\n💸 مصروفات: ${r.expenses}\n💰 *الصافي: ${r.net} ج.م*`; document.getElementById('qrModal').style.display='block'; document.getElementById('qr-container').innerHTML=''; new QRCode(document.getElementById("qr-container"), {text: `https://wa.me/?text=${encodeURIComponent(t)}`, width:220, height:220}); }
+        function deleteHistoryItem(i) { if(confirm('حذف السجل؟')){ let h = JSON.parse(localStorage.getItem('shopHistory')); h.splice(i,1); localStorage.setItem('shopHistory', JSON.stringify(h)); loadHistory(); } }
+        function restoreHistoryItem(i) { let h=JSON.parse(localStorage.getItem('shopHistory')); let r=h[i]; ['caf','baz','stf','exp'].forEach(c=>document.getElementById('list-'+c).innerHTML=r[c+'List']); recalculateAllTotals(); editingMode=true; editingIndex=i; editingDate=r.date; document.getElementById('edit-mode-banner').style.display='block'; document.getElementById('edit-date-display').innerText=editingDate; document.getElementById('normal-footer').style.display='none'; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        function cancelEdit() { editingMode=false; editingIndex=-1; document.getElementById('edit-mode-banner').style.display='none'; document.getElementById('normal-footer').style.display='flex'; clearWorkspace(); loadActiveState(); }
+        function saveEditedDay() { let h=JSON.parse(localStorage.getItem('shopHistory')); h[editingIndex]=getRecordObj(editingDate, "day"); localStorage.setItem('shopHistory', JSON.stringify(h)); cancelEdit(); loadHistory(); alert("تم التعديل بنجاح!"); }
+
+        function openSortModal(t) { currentSortType=t; let l=document.getElementById('sort-list'); l.innerHTML=''; let arr = t==='caf'?Object.keys(cafMenu):staffNames; arr.forEach(x => { l.innerHTML += `<li style="padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:8px; background:#f8f9fa; display:flex; justify-content:space-between; align-items:center;" data-id="${x}"><b>${x}</b> <div><button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px;" onclick="this.closest('li').previousElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li'), this.closest('li').previousElementSibling)">⬆️</button> <button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px;" onclick="this.closest('li').nextElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li').nextElementSibling, this.closest('li'))">⬇️</button></div></li>`; }); document.getElementById('sortModal').style.display='block'; }
+        function closeSortModal() { document.getElementById('sortModal').style.display='none'; }
+        function saveSort() { let n=[]; document.querySelectorAll('#sort-list li').forEach(li=>n.push(li.getAttribute('data-id'))); if(currentSortType==='caf'){ let nm={}; n.forEach(k=>nm[k]=cafMenu[k]); cafMenu=nm; localStorage.setItem('cafMenuData',JSON.stringify(cafMenu)); renderCafDropdown(); }else{ staffNames=n; localStorage.setItem('staffNamesData',JSON.stringify(staffNames)); renderStaffList(); } closeSortModal(); }
+    </script>
+    <!-- Firebase (لتفعيل الربط بين التليفونات) -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        /* ==========================================================================
+           طبقة الربط بين التليفونات (Cloud Sync) — كود منفصل تمامًا
+           ملوش أي دخل في حسابات الدفتر أو الشيفتات أو التقفيل، وبيقرا ويكتب بس
+           على نفس الـ localStorage اللي البرنامج الأصلي بيستخدمه، فيرفع أي تغيير
+           للسحابة تلقائي، وينزل أي تغيير جاي من تليفون تاني بنفس الطريقة.
+           ========================================================================== */
+
+        // ⬇️⬇️ عدّل الأربع سطور دي ببيانات مشروعك المجاني على console.firebase.google.com ⬇️⬇️
+        const firebaseConfig = {
+            apiKey: "PASTE_YOUR_API_KEY",
+            authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+            projectId: "PASTE_YOUR_PROJECT_ID",
+            appId: "PASTE_YOUR_APP_ID"
+        };
+        // ⬆️⬆️ لو سبتها زي ما هي، البرنامج هيشتغل عادي على كل تليفون لوحده من غير ربط ⬆️⬆️
+
+        const CLOUD_SYNC_ENABLED = firebaseConfig.apiKey && firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
+        const SYNC_KEYS = ['activeDayData', 'shopHistory', 'cafMenuData', 'staffNamesData', 'persistentUnpaidDebts'];
+
+        let shopDocRef = null, pushTimer = null, applyingRemote = false;
+        const deviceId = localStorage.getItem('deviceId') || (function () {
+            const id = 'd' + Math.random().toString(36).slice(2) + Date.now();
+            localStorage.setItem('deviceId', id);
+            return id;
+        })();
+
+        function setSyncStatus(state) {
+            const dot = document.getElementById('sync-dot'), txt = document.getElementById('sync-text');
+            if (!dot) return;
+            if (state === 'online') { dot.style.background = '#2f7a4f'; txt.innerText = 'متصل ومتزامن مع باقي التليفونات'; }
+            else if (state === 'offline') { dot.style.background = '#a8611f'; txt.innerText = 'أوفلاين — التعديلات هتترفع أول ما النت يرجع'; }
+            else { dot.style.background = '#9aa1a6'; txt.innerText = 'المزامنة غير مفعّلة (شغال على الجهاز ده بس)'; }
+        }
+
+        function getShopCode() {
+            let code = localStorage.getItem('shopCode');
+            if (!code) {
+                code = prompt('اكتب "كود المحل" (اكتب نفس الكود بالظبط في كل تليفون عاوز تربطه بيه):');
+                if (code && code.trim()) { code = code.trim(); localStorage.setItem('shopCode', code); }
+                else { code = null; }
+            }
+            return code;
+        }
+
+        function openSettingsModal() {
+            document.getElementById('shop-code-input').value = localStorage.getItem('shopCode') || '';
+            document.getElementById('settingsModal').style.display = 'block';
+        }
+        function saveShopCodeFromModal() {
+            const val = document.getElementById('shop-code-input').value.trim();
+            if (!val) { alert('اكتب كود صحيح'); return; }
+            localStorage.setItem('shopCode', val);
+            alert('تم الحفظ، هيتم إعادة تحميل الصفحة عشان يربط بالكود الجديد.');
+            location.reload();
+        }
+
+        function cloudPush() {
+            if (!CLOUD_SYNC_ENABLED || !shopDocRef || applyingRemote) return;
+            clearTimeout(pushTimer);
+            pushTimer = setTimeout(function () {
+                const payload = {};
+                SYNC_KEYS.forEach(function (k) { const v = localStorage.getItem(k); if (v !== null) payload[k] = v; });
+                payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                payload.deviceId = deviceId;
+                shopDocRef.set(payload, { merge: true }).catch(function (err) { console.error('Sync push error:', err); });
+            }, 600);
+        }
+
+        function applyRemoteData(data) {
+            applyingRemote = true;
+            SYNC_KEYS.forEach(function (k) { if (data[k] !== undefined) localStorage.setItem(k, data[k]); });
+            loadCafMenu();
+            loadStaffNames();
+            loadUnpaidDebts();
+            if (typeof editingMode === 'undefined' || !editingMode) { loadActiveState(); }
+            loadHistory();
+            applyingRemote = false;
+        }
+
+        function initCloudSync() {
+            if (!CLOUD_SYNC_ENABLED) { setSyncStatus('off'); return; }
+            if (typeof firebase === 'undefined') { setSyncStatus('offline'); console.warn('Firebase SDK لم يتحمّل (تأكد من النت أو من CDN)'); return; }
+            const shopCode = getShopCode();
+            if (!shopCode) { setSyncStatus('off'); return; }
+
+            try {
+                firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+                db.enablePersistence({ synchronizeTabs: true }).catch(function (err) { console.warn('Offline persistence not available:', err.code); });
+                shopDocRef = db.collection('shops').doc(shopCode);
+
+                shopDocRef.onSnapshot({ includeMetadataChanges: true }, function (snap) {
+                    setSyncStatus(snap.metadata.fromCache ? 'offline' : 'online');
+                    if (!snap.exists) { cloudPush(); return; }
+                    if (snap.metadata.hasPendingWrites) return;
+                    applyRemoteData(snap.data());
+                }, function (err) {
+                    console.error('Sync listen error:', err);
+                    setSyncStatus('offline');
+                });
+
+                const origSetItem = localStorage.setItem.bind(localStorage);
+                localStorage.setItem = function (key, value) {
+                    origSetItem(key, value);
+                    if (SYNC_KEYS.indexOf(key) !== -1 && !applyingRemote) cloudPush();
+                };
+            } catch (err) {
+                console.error('Cloud sync init failed:', err);
+                setSyncStatus('offline');
+            }
+        }
+
+        // ربط شريط حالة الشيفت بدالة loadHistory الأصلية من غير ما نلمسها
+        if (typeof loadHistory === 'function') {
+            const _origLoadHistory = loadHistory;
+            loadHistory = function () {
+                _origLoadHistory();
+                updateShiftStatusBanner();
+            };
+        }
+        function updateShiftStatusBanner() {
+            const el = document.getElementById('shift-status-text');
+            if (!el) return;
+            const history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+            if (history.length === 0) { el.innerText = 'مفيش عمليات لسه — ابدأ أول عملية في الدفتر'; return; }
+            const last = history[history.length - 1];
+            el.innerText = last.type === 'shift'
+                ? ('آخر تسليم شيفت: ' + last.date.replace(' (تسليم شيفت)', '') + ' — الشيفت الجاي بيكمل على نفس الدفتر')
+                : ('آخر تقفيل يوم: ' + last.date.replace(' (تقفيل يومي)', '') + ' — الدفتر اتصفر وبدأ يوم جديد');
+        }
+
+        // عرض تاريخ اليوم في الهيدر
+        document.getElementById('header-date').innerText = new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        // تسجيل Service Worker للعمل أوفلاين والتثبيت كتطبيق على الشاشة الرئيسية
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW register failed:', e); }); });
+        }
+
+        window.addEventListener('load', function () { setTimeout(initCloudSync, 300); });
+    </script>
+</body>
+</html>
