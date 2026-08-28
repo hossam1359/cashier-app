@@ -685,5 +685,85 @@ function generateWhatsAppImage(i) {
     });
 }
     </script>
+    <script>
+/* ==== نسخة محسّنة من صورة الواتساب — بتفاصيل كل صنف (بتستبدل النسخة القديمة تلقائيًا) ==== */
+function extractItems(html) {
+    const temp = document.createElement('ul');
+    temp.innerHTML = html || '';
+    return Array.from(temp.querySelectorAll('li')).map(function (li) {
+        const price = li.getAttribute('data-price') || '0';
+        const note = li.getAttribute('data-note') || '';
+        const cb = li.querySelector('.paid-check');
+        const isCredit = cb ? !cb.checked : false;
+        return { price: price, note: note, credit: isCredit };
+    });
+}
+
+function renderItemsChips(items) {
+    if (items.length === 0) return '<div style="font-size:12.5px; color:#a8a196; padding:6px 0;">مفيش أصناف</div>';
+    return '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">' + items.map(function (it) {
+        const bg = it.credit ? '#fdf1d9' : '#ffffff';
+        const border = it.credit ? '#d9ad5c' : '#e3dac2';
+        const color = it.credit ? '#8a6224' : '#333333';
+        const label = (it.credit ? '(أجل) ' : '') + (it.note ? it.note + ' ' : '') + it.price;
+        return '<span style="display:inline-block; padding:6px 10px; border:1px solid ' + border + '; background:' + bg + '; border-radius:9px; font-size:12.5px; font-weight:600; color:' + color + ';">' + label + '</span>';
+    }).join('') + '</div>';
+}
+
+function categorySection(title, color, icon, total, items) {
+    return `
+        <div style="margin-top:16px; padding:14px; border-radius:12px; background:#fff; border-top:3px solid ${color};">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:800; color:${color}; font-size:15px;">${icon} ${title}</span>
+                <span style="font-weight:800; color:${color}; font-size:15px;">${total} ج</span>
+            </div>
+            ${renderItemsChips(items)}
+        </div>`;
+}
+
+function generateWhatsAppImage(i) {
+    const r = (JSON.parse(localStorage.getItem('shopHistory')))[i];
+    const cafItems = extractItems(r.cafList);
+    const bazItems = extractItems(r.bazList);
+    const stfItems = extractItems(r.stfList);
+    const expItems = extractItems(r.expList);
+
+    const box = document.createElement('div');
+    box.style.cssText = 'width:400px; padding:22px; background:#f3efe3; font-family:Cairo, sans-serif; color:#232323; direction:rtl; position:fixed; left:-9999px; top:0; border-radius:16px;';
+    box.innerHTML = `
+        <div style="text-align:center; border-bottom:2px dashed #c9bfa0; padding-bottom:14px; margin-bottom:4px;">
+            <div style="font-size:21px; font-weight:800; color:#1c2b33;">📒 تقرير قهوة مانو</div>
+            <div style="font-size:13px; color:#6b6459; margin-top:4px;">${r.date}</div>
+        </div>
+        ${categorySection('كافتيريا', '#256d74', '☕', r.caf, cafItems)}
+        ${categorySection('بازار', '#64712f', '🍫', r.baz, bazItems)}
+        ${categorySection('اصطف', '#a8611f', '👥', r.stf, stfItems)}
+        ${categorySection('مصروفات', '#9c332b', '💸', r.expenses, expItems)}
+        <div style="margin-top:16px; background:#2f7a4f; color:#fff; text-align:center; padding:14px; border-radius:12px; font-size:20px; font-weight:800;">
+            الصافي: ${r.net} ج.م
+        </div>
+        <div style="text-align:center; margin-top:12px; font-size:11px; color:#a8a196;">تم الإنشاء من دفتر قهوة مانو</div>
+    `;
+    document.body.appendChild(box);
+
+    html2canvas(box, { scale: 2, backgroundColor: '#f3efe3' }).then(function (canvas) {
+        document.body.removeChild(box);
+        canvas.toBlob(function (blob) {
+            const fileName = 'تقرير-اليوم.png';
+            const file = new File([blob], fileName, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'تقرير الدفتر', text: 'تقرير يوم ' + r.date })
+                    .catch(function (err) { console.warn('Share cancelled:', err); });
+            } else {
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                alert('تم تحميل صورة التقرير — تقدر ترفقها في واتساب يدويًا من معرض الصور.');
+            }
+        }, 'image/png');
+    });
+}
+</script>
 </body>
 </html>
