@@ -328,6 +328,10 @@
 
     <div style="max-width: 800px; margin: 20px auto; padding: 10px;">
         <h3 style="text-align: right; color: #2c3e50;">📅 سجل الأيام والشيفتات</h3>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <input type="text" id="history-search" oninput="filterHistoryByDate()" placeholder="🔍 دور بتاريخ أو يوم معيّن..." style="flex:2;">
+    <button onclick="generatePeriodSummary()" style="flex:1; background:var(--brass); color:#2b2107; border-radius:12px; font-size:13.5px; padding:0 10px; font-weight:700;">📊 ملخص فترة</button>
+</div>
         <div id="history-container" style="display: grid; gap: 15px;"></div>
     </div>
 
@@ -760,6 +764,95 @@ function generateWhatsAppImage(i) {
                 link.href = URL.createObjectURL(blob);
                 link.click();
                 alert('تم تحميل صورة التقرير — تقدر ترفقها في واتساب يدويًا من معرض الصور.');
+            }
+        }, 'image/png');
+    });
+}
+</script>
+    <script>
+/* ==== بحث في السجل بالتاريخ ==== */
+if (typeof loadHistory === 'function') {
+    const _origLoadHistory2 = loadHistory;
+    loadHistory = function () {
+        _origLoadHistory2();
+        filterHistoryByDate();
+    };
+}
+function filterHistoryByDate() {
+    const term = (document.getElementById('history-search') || {}).value || '';
+    const normalized = term.trim();
+    const container = document.getElementById('history-container');
+    if (!container) return;
+    Array.from(container.children).forEach(function (card) {
+        const heading = card.querySelector('h4');
+        const text = heading ? heading.innerText : '';
+        card.style.display = (normalized === '' || text.indexOf(normalized) !== -1) ? '' : 'none';
+    });
+}
+
+/* ==== ملخص فترة (أسبوع / شهر) + صورة واتساب ==== */
+function generatePeriodSummary() {
+    const daysInput = prompt('كام يوم عاوز تجمع؟ (٧ للأسبوع، ٣٠ للشهر)', '7');
+    if (!daysInput) return;
+    const n = parseInt(daysInput);
+    if (!n || n <= 0) { alert('اكتب رقم صحيح'); return; }
+
+    const history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+    const dayRecords = history.filter(function (r) { return r.type === 'day'; }).slice(-n);
+    if (dayRecords.length === 0) { alert('مفيش أيام مقفولة كفاية لسه عشان نجمعها'); return; }
+
+    const sum = { caf: 0, baz: 0, stf: 0, expenses: 0, net: 0, income: 0 };
+    dayRecords.forEach(function (r) {
+        sum.caf += Number(r.caf) || 0;
+        sum.baz += Number(r.baz) || 0;
+        sum.stf += Number(r.stf) || 0;
+        sum.expenses += Number(r.expenses) || 0;
+        sum.net += Number(r.net) || 0;
+        sum.income += Number(r.income) || 0;
+    });
+
+    const fromDate = dayRecords[0].date;
+    const toDate = dayRecords[dayRecords.length - 1].date;
+    buildPeriodSummaryImage(sum, dayRecords.length, fromDate, toDate);
+}
+
+function buildPeriodSummaryImage(sum, count, fromDate, toDate) {
+    const box = document.createElement('div');
+    box.style.cssText = 'width:380px; padding:24px; background:#fbf8f1; font-family:Cairo, sans-serif; color:#232323; direction:rtl; position:fixed; left:-9999px; top:0; border-radius:16px;';
+    box.innerHTML = `
+        <div style="text-align:center; border-bottom:2px dashed #e3dac2; padding-bottom:14px; margin-bottom:14px;">
+            <div style="font-size:22px; font-weight:800; color:#1c2b33;">📊 ملخص ${count} يوم</div>
+            <div style="font-size:12.5px; color:#6b6459; margin-top:6px;">من: ${fromDate}</div>
+            <div style="font-size:12.5px; color:#6b6459;">إلى: ${toDate}</div>
+        </div>
+        <table style="width:100%; font-size:15px; border-collapse:collapse;">
+            <tr><td style="padding:8px 0; color:#256d74; font-weight:700;">☕ كافتيريا</td><td style="text-align:left; font-weight:700;">${sum.caf} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#64712f; font-weight:700;">🍫 بازار</td><td style="text-align:left; font-weight:700;">${sum.baz} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#a8611f; font-weight:700;">👥 اصطف</td><td style="text-align:left; font-weight:700;">${sum.stf} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#333; font-weight:700; border-top:1px dashed #e3dac2;">💵 إجمالي الإيرادات</td><td style="text-align:left; font-weight:700; border-top:1px dashed #e3dac2;">${sum.income} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#9c332b; font-weight:700;">💸 مصروفات</td><td style="text-align:left; font-weight:700;">${sum.expenses} ج</td></tr>
+        </table>
+        <div style="margin-top:16px; background:#2f7a4f; color:#fff; text-align:center; padding:14px; border-radius:12px; font-size:20px; font-weight:800;">
+            الصافي: ${sum.net} ج.م
+        </div>
+        <div style="text-align:center; margin-top:14px; font-size:11px; color:#a8a196;">تم الإنشاء من دفتر قهوة مانو</div>
+    `;
+    document.body.appendChild(box);
+
+    html2canvas(box, { scale: 2, backgroundColor: '#fbf8f1' }).then(function (canvas) {
+        document.body.removeChild(box);
+        canvas.toBlob(function (blob) {
+            const fileName = 'ملخص-' + count + '-يوم.png';
+            const file = new File([blob], fileName, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'ملخص الفترة', text: 'ملخص ' + count + ' يوم' })
+                    .catch(function (err) { console.warn('Share cancelled:', err); });
+            } else {
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                alert('تم تحميل صورة الملخص — تقدر ترفقها في واتساب يدويًا.');
             }
         }, 'image/png');
     });
