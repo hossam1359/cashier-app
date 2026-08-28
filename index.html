@@ -858,5 +858,52 @@ function buildPeriodSummaryImage(sum, count, fromDate, toDate) {
     });
 }
 </script>
+    <script>
+/* ==== إصلاح شامل: أرقام إنجليزي + اسم اليوم في كل التواريخ + بحث أسهل ==== */
+const ARABIC_DIGITS_MAP = '٠١٢٣٤٥٦٧٨٩';
+function toEnglishDigits(str) {
+    return String(str || '').replace(/[٠-٩]/g, function (d) { return ARABIC_DIGITS_MAP.indexOf(d); });
+}
+function formatDisplayDate(rawDateStr) {
+    const withEnglishDigits = toEnglishDigits(rawDateStr);
+    const match = withEnglishDigits.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!match) return withEnglishDigits;
+    const d = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+    if (isNaN(d.getTime())) return withEnglishDigits;
+    const weekday = d.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long' });
+    return weekday + '، ' + withEnglishDigits;
+}
+
+// تاريخ اليوم في الهيدر بالأرقام الإنجليزي
+const headerDateEl = document.getElementById('header-date');
+if (headerDateEl) {
+    headerDateEl.innerText = new Date().toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// إصلاح تواريخ سجل الأيام والشيفتات بعد كل عرض
+if (typeof loadHistory === 'function') {
+    const _origLoadHistory3 = loadHistory;
+    loadHistory = function () {
+        _origLoadHistory3();
+        const container = document.getElementById('history-container');
+        if (container) {
+            container.querySelectorAll('h4').forEach(function (h) {
+                h.innerText = formatDisplayDate(h.innerText);
+            });
+        }
+        if (typeof filterHistoryByDate === 'function') filterHistoryByDate();
+    };
+}
+
+// إصلاح تاريخ شريط "وضع تعديل السجل"
+if (typeof restoreHistoryItem === 'function') {
+    const _origRestoreHistoryItem = restoreHistoryItem;
+    restoreHistoryItem = function (i) {
+        _origRestoreHistoryItem(i);
+        const el = document.getElementById('edit-date-display');
+        if (el) el.innerText = formatDisplayDate(el.innerText);
+    };
+}
+    </script>
 </body>
 </html>
