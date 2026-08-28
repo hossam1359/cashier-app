@@ -465,7 +465,7 @@
                             <span>إيرادات: <b style="color:#27ae60">${r.income}</b></span> | <span>مصروفات: <b style="color:#e74c3c">${r.expenses}</b></span> | <span style="font-weight:bold; font-size:16px;">الصافي: ${r.net}</span>
                         </div>
                         <div style="margin-top:15px; display:flex; gap:8px; flex-wrap:wrap;">
-                            <button onclick="showWhatsAppQR(${origIdx})" style="background:#25D366; color:white; padding:8px 12px; border-radius:8px; flex:1;">QR واتساب</button>
+                            <button onclick="generateWhatsAppImage(${origIdx})" style="background:#25D366; color:white; padding:8px 12px; border-radius:8px; flex:1;">📸 صورة للواتساب</button>
                             ${r.type === "day" ? `<button onclick="restoreHistoryItem(${origIdx})" style="background:#f39c12; color:white; padding:8px 12px; border-radius:8px; flex:1;">تعديل</button>` : ''}
                             <button onclick="deleteHistoryItem(${origIdx})" style="background:#e74c3c; color:white; padding:8px 12px; border-radius:8px; flex:1;">حذف</button>
                         </div>
@@ -640,6 +640,49 @@ if (typeof payUnpaidDebt === 'function') {
         _origPayUnpaidDebt(i);
         saveActiveState();
     };
+}
+    </script>
+    <script>
+/* ==== زرار "صورة للواتساب" — بيبني صورة إيصال لليوم ويفتح شاشة المشاركة ==== */
+function generateWhatsAppImage(i) {
+    const r = (JSON.parse(localStorage.getItem('shopHistory')))[i];
+    const box = document.createElement('div');
+    box.style.cssText = 'width:380px; padding:24px; background:#fbf8f1; font-family:Cairo, sans-serif; color:#232323; direction:rtl; position:fixed; left:-9999px; top:0; border-radius:16px;';
+    box.innerHTML = `
+        <div style="text-align:center; border-bottom:2px dashed #e3dac2; padding-bottom:14px; margin-bottom:14px;">
+            <div style="font-size:22px; font-weight:800; color:#1c2b33;">📒 دفتر الحسابات اليومي</div>
+            <div style="font-size:14px; color:#6b6459; margin-top:4px;">${r.date}</div>
+        </div>
+        <table style="width:100%; font-size:15px; border-collapse:collapse;">
+            <tr><td style="padding:8px 0; color:#256d74; font-weight:700;">☕ كافتيريا</td><td style="text-align:left; font-weight:700;">${r.caf} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#64712f; font-weight:700;">🍫 بازار</td><td style="text-align:left; font-weight:700;">${r.baz} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#a8611f; font-weight:700;">👥 اصطف</td><td style="text-align:left; font-weight:700;">${r.stf} ج</td></tr>
+            <tr><td style="padding:8px 0; color:#9c332b; font-weight:700;">💸 مصروفات</td><td style="text-align:left; font-weight:700;">${r.expenses} ج</td></tr>
+        </table>
+        <div style="margin-top:16px; background:#2f7a4f; color:#fff; text-align:center; padding:14px; border-radius:12px; font-size:20px; font-weight:800;">
+            الصافي: ${r.net} ج.م
+        </div>
+        <div style="text-align:center; margin-top:14px; font-size:11px; color:#a8a196;">تم الإنشاء من دفتر الحسابات اليومي</div>
+    `;
+    document.body.appendChild(box);
+
+    html2canvas(box, { scale: 2, backgroundColor: '#fbf8f1' }).then(function (canvas) {
+        document.body.removeChild(box);
+        canvas.toBlob(function (blob) {
+            const fileName = 'تقرير-اليوم.png';
+            const file = new File([blob], fileName, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'تقرير الدفتر', text: 'تقرير يوم ' + r.date })
+                    .catch(function (err) { console.warn('Share cancelled:', err); });
+            } else {
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                alert('تم تحميل صورة التقرير — تقدر ترفقها في واتساب يدويًا من معرض الصور.');
+            }
+        }, 'image/png');
+    });
 }
     </script>
 </body>
