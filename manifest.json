@@ -1,13 +1,13 @@
 {
-  "name": "دفتر الحسابات اليومي الشامل",
-  "short_name": "الدفتر",
-  "description": "دفتر حسابات يومي للمحل - كافتيريا وبازار واصطف",
+  "name": "قهوة مانو",
+  "short_name": "قهوة مانو",
+  "description": "دفتر حسابات قهوة مانو",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1c2b33",
-  "theme_color": "#1c2b33",
+  "background_color": "#3a2a20",
+  "theme_color": "#3a2a20",
   "lang": "ar",
   "dir": "rtl",
   "icons": [
