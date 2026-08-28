@@ -632,5 +632,15 @@
 
         window.addEventListener('load', function () { setTimeout(initCloudSync, 300); });
     </script>
+    <script>
+/* ==== إصلاح: حفظ عملية "سداد" من الآجل المستمر فورًا عشان متختفيش ==== */
+if (typeof payUnpaidDebt === 'function') {
+    const _origPayUnpaidDebt = payUnpaidDebt;
+    payUnpaidDebt = function (i) {
+        _origPayUnpaidDebt(i);
+        saveActiveState();
+    };
+}
+    </script>
 </body>
 </html>
