@@ -312,6 +312,16 @@
             <ul class="entries" id="list-exp"></ul>
         </div>
     </div>
+    <div class="column" style="max-width: 800px; margin: 0 auto 15px auto; border-top-color: #6b4a2f; background: #fdf8f3;">
+    <h3 style="color: #6b4a2f;">🧾 فواتير الموردين</h3>
+    <div class="input-row">
+        <input type="text" id="note-invoice" class="note-input" placeholder="اسم الشركة" style="width:50%;">
+        <input type="number" id="price-invoice" class="price-input" placeholder="المبلغ" style="width:50%;">
+    </div>
+    <button class="add-btn" style="background:#6b4a2f;" onclick="addSupplierInvoice()">إضافة فاتورة</button>
+    <ul class="entries" id="list-invoices"></ul>
+    <div class="total-box" style="background: rgba(107,74,47,0.1); color:#6b4a2f;">إجمالي المستحق للموردين: <span id="total-invoices-sum">0</span> ج</div>
+    </div>
 
     <div class="grand-total-banner">
         <div class="summary-row">
@@ -1024,5 +1034,77 @@ function initCloudSync() {
     }
 }
 </script>
+    <script>
+/* ==== قسم "فواتير الموردين" — مستقل تمامًا، مالوش علاقة بحسابات الكافتيريا/البازار/الاصطف ==== */
+let supplierInvoices = [];
+
+function loadSupplierInvoices() {
+    supplierInvoices = JSON.parse(localStorage.getItem('supplierInvoices')) || [];
+    renderSupplierInvoices();
+}
+function saveSupplierInvoices() {
+    localStorage.setItem('supplierInvoices', JSON.stringify(supplierInvoices));
+    renderSupplierInvoices();
+}
+function renderSupplierInvoices() {
+    const l = document.getElementById('list-invoices');
+    if (!l) return;
+    let t = 0;
+    l.innerHTML = '';
+    supplierInvoices.forEach(function (inv, i) {
+        t += inv.amount;
+        l.innerHTML += '<li><div class="item-details"><button onclick="paySupplierInvoice(' + i + ')" style="background:#27ae60;color:white;border-radius:6px;padding:6px 12px;border:none;font-family:\'Cairo\';font-weight:bold;">دفعت</button><span class="item-text"><b>' + inv.name + '</b>: <span style="color:#e74c3c;">' + inv.amount + '</span> ج</span></div><span class="del" onclick="deleteSupplierInvoice(' + i + ')">×</span></li>';
+    });
+    const totalEl = document.getElementById('total-invoices-sum');
+    if (totalEl) totalEl.innerText = t;
+}
+function addSupplierInvoice() {
+    const p = parseFloat(document.getElementById('price-invoice').value);
+    const n = document.getElementById('note-invoice').value.trim();
+    if (p > 0 && n) {
+        supplierInvoices.push({ name: n, amount: p });
+        saveSupplierInvoices();
+        document.getElementById('price-invoice').value = '';
+        document.getElementById('note-invoice').value = '';
+    } else {
+        alert('اكتب اسم الشركة والمبلغ الأول');
+    }
+}
+function paySupplierInvoice(i) {
+    if (confirm('اتأكدت إنك دفعت الفاتورة دي؟')) {
+        supplierInvoices.splice(i, 1);
+        saveSupplierInvoices();
+    }
+}
+function deleteSupplierInvoice(i) {
+    if (confirm('حذف الفاتورة دي؟')) {
+        supplierInvoices.splice(i, 1);
+        saveSupplierInvoices();
+    }
+}
+
+// تحميل القسم عند فتح البرنامج من غير ما نلمس initApp الأصلية
+if (typeof initApp === 'function') {
+    const _origInitApp = initApp;
+    initApp = function () { _origInitApp(); loadSupplierInvoices(); };
+}
+
+// ربط القسم بالمزامنة بين التليفونات
+if (typeof SYNC_KEYS !== 'undefined' && SYNC_KEYS.indexOf('supplierInvoices') === -1) {
+    SYNC_KEYS.push('supplierInvoices');
+}
+function applyRemoteData(data) {
+    applyingRemote = true;
+    SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; }).forEach(function (k) {
+        if (data[k] !== undefined) localStorage.setItem(k, data[k]);
+    });
+    loadCafMenu();
+    loadStaffNames();
+    loadUnpaidDebts();
+    loadSupplierInvoices();
+    if (typeof editingMode === 'undefined' || !editingMode) { loadActiveState(); }
+    applyingRemote = false;
+}
+    </script>
 </body>
 </html>
