@@ -905,5 +905,124 @@ if (typeof restoreHistoryItem === 'function') {
     };
 }
     </script>
+    <script>
+/* ==== ترقية تخزين السجل: كل يوم/شيفت في مستند منفصل بدل ما يكونوا كلهم في مستند واحد ====
+   ده بيشيل ليميت الـ 1 ميجابايت للمستند الواحد نهائيًا */
+
+let historyPushTimer = null;
+
+function pushHistoryToCloud() {
+    if (!CLOUD_SYNC_ENABLED || !shopDocRef || applyingRemote) return;
+    clearTimeout(historyPushTimer);
+    historyPushTimer = setTimeout(function () {
+        const history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+        const historyCol = shopDocRef.collection('history');
+        historyCol.get().then(function (snap) {
+            return Promise.all(snap.docs.map(function (d) { return d.ref.delete(); }));
+        }).then(function () {
+            return Promise.all(history.map(function (record, idx) {
+                return historyCol.add(Object.assign({}, record, { order: idx }));
+            }));
+        }).catch(function (err) { console.error('History sync error:', err); });
+    }, 800);
+}
+
+function migrateHistoryIfNeeded() {
+    if (!shopDocRef) return;
+    shopDocRef.get().then(function (doc) {
+        if (!doc.exists) return;
+        const data = doc.data();
+        if (!data.shopHistory) return;
+        const historyCol = shopDocRef.collection('history');
+        historyCol.limit(1).get().then(function (existing) {
+            if (!existing.empty) return;
+            let oldHistory = [];
+            try { oldHistory = JSON.parse(data.shopHistory); } catch (e) { oldHistory = []; }
+            Promise.all(oldHistory.map(function (record, idx) {
+                return historyCol.add(Object.assign({}, record, { order: idx }));
+            })).then(function () {
+                return shopDocRef.update({ shopHistory: firebase.firestore.FieldValue.delete() });
+            }).then(function () {
+                console.log('تم ترحيل السجل القديم بنجاح');
+            }).catch(function (err) { console.error('Migration error:', err); });
+        });
+    }).catch(function (err) { console.error('Migration check error:', err); });
+}
+
+function applyRemoteData(data) {
+    applyingRemote = true;
+    SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; }).forEach(function (k) {
+        if (data[k] !== undefined) localStorage.setItem(k, data[k]);
+    });
+    loadCafMenu();
+    loadStaffNames();
+    loadUnpaidDebts();
+    if (typeof editingMode === 'undefined' || !editingMode) { loadActiveState(); }
+    applyingRemote = false;
+}
+
+function applyRemoteHistory(docs) {
+    applyingRemote = true;
+    const sorted = docs.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    const cleaned = sorted.map(function (r) { const c = Object.assign({}, r); delete c.order; return c; });
+    localStorage.setItem('shopHistory', JSON.stringify(cleaned));
+    if (typeof editingMode === 'undefined' || !editingMode) { loadHistory(); }
+    applyingRemote = false;
+}
+
+function cloudPush() {
+    if (!CLOUD_SYNC_ENABLED || !shopDocRef || applyingRemote) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+        const payload = {};
+        SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; }).forEach(function (k) {
+            const v = localStorage.getItem(k); if (v !== null) payload[k] = v;
+        });
+        payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        payload.deviceId = deviceId;
+        shopDocRef.set(payload, { merge: true }).catch(function (err) { console.error('Sync push error:', err); });
+    }, 600);
+}
+
+function initCloudSync() {
+    if (!CLOUD_SYNC_ENABLED) { setSyncStatus('off'); return; }
+    if (typeof firebase === 'undefined') { setSyncStatus('offline'); return; }
+    const shopCode = getShopCode();
+    if (!shopCode) { setSyncStatus('off'); return; }
+
+    try {
+        if (!firebase.apps || firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.firestore();
+        db.enablePersistence({ synchronizeTabs: true }).catch(function (err) { console.warn('Persistence:', err.code); });
+        shopDocRef = db.collection('shops').doc(shopCode);
+
+        migrateHistoryIfNeeded();
+
+        shopDocRef.onSnapshot({ includeMetadataChanges: true }, function (snap) {
+            setSyncStatus(snap.metadata.fromCache ? 'offline' : 'online');
+            if (!snap.exists) { cloudPush(); pushHistoryToCloud(); return; }
+            if (snap.metadata.hasPendingWrites) return;
+            applyRemoteData(snap.data());
+        }, function (err) { console.error('Sync listen error:', err); setSyncStatus('offline'); });
+
+        shopDocRef.collection('history').onSnapshot({ includeMetadataChanges: true }, function (snap) {
+            if (snap.metadata.hasPendingWrites) return;
+            const docs = snap.docs.map(function (d) { return d.data(); });
+            applyRemoteHistory(docs);
+        }, function (err) { console.error('History listen error:', err); });
+
+        const origSetItem2 = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = function (key, value) {
+            origSetItem2(key, value);
+            if (applyingRemote) return;
+            if (key === 'shopHistory') { pushHistoryToCloud(); }
+            else if (SYNC_KEYS.indexOf(key) !== -1) { cloudPush(); }
+        };
+    } catch (err) {
+        console.error('Cloud sync init failed:', err);
+        setSyncStatus('offline');
+    }
+}
+</script>
 </body>
 </html>
