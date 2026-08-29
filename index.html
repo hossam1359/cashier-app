@@ -1280,5 +1280,49 @@ function buildPeriodSummaryImage(sum, count, fromDate, toDate) {
     });
 }
     </script>
+    <script>
+/* ==== إمكانية حذف أي عملية من سجل المدفوعات ==== */
+function deletePaidInvoiceRecord(idx) {
+    if (!confirm('حذف السجل ده؟')) return;
+    let paidHistory = JSON.parse(localStorage.getItem('paidInvoicesHistory')) || [];
+    paidHistory.splice(idx, 1);
+    localStorage.setItem('paidInvoicesHistory', JSON.stringify(paidHistory));
+    renderInvoiceHistoryModal();
+}
+
+function renderInvoiceHistoryModal() {
+    const paidHistory = JSON.parse(localStorage.getItem('paidInvoicesHistory')) || [];
+    const unpaidTotals = groupByCompany(supplierInvoices);
+    const paidTotals = groupByCompany(paidHistory);
+    const companies = Array.from(new Set(Object.keys(unpaidTotals).concat(Object.keys(paidTotals))));
+
+    const totalsEl = document.getElementById('invoice-company-totals');
+    if (totalsEl) {
+        totalsEl.innerHTML = companies.length === 0
+            ? '<div style="font-size:13px; color:#a8a196;">مفيش بيانات لسه</div>'
+            : companies.map(function (name) {
+                const unpaid = unpaidTotals[name] || 0;
+                const paid = paidTotals[name] || 0;
+                return '<div style="display:flex; justify-content:space-between; padding:8px 10px; background:#fdf8f3; border-radius:10px; margin-bottom:6px; font-size:13px;">' +
+                    '<b>' + name + '</b>' +
+                    '<span>مستحق: <b style="color:#c0453a;">' + unpaid + '</b> | دفعنا: <b style="color:#2f7a4f;">' + paid + '</b></span>' +
+                    '</div>';
+            }).join('');
+    }
+
+    const listEl = document.getElementById('invoice-paid-list');
+    if (listEl) {
+        const startIdx = Math.max(0, paidHistory.length - 30);
+        const recent = paidHistory.slice(startIdx).map(function (p, idx) { return { data: p, realIndex: startIdx + idx }; });
+        const displayItems = recent.slice().reverse();
+        listEl.innerHTML = displayItems.length === 0
+            ? '<li style="color:#a8a196; font-size:13px;">لسه مفيش مدفوعات</li>'
+            : displayItems.map(function (item) {
+                const p = item.data;
+                return '<li><div class="item-details"><span class="item-text"><b>' + p.name + '</b>: ' + p.amount + ' ج <span style="color:#a8a196; font-size:11px;">(' + (p.paidDate || '') + ')</span></span></div><span class="del" onclick="deletePaidInvoiceRecord(' + item.realIndex + ')">×</span></li>';
+            }).join('');
+    }
+}
+    </script>
 </body>
 </html>
