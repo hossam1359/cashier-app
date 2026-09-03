@@ -337,7 +337,6 @@
     </div>
 
     <div class="footer-panel" id="normal-footer">
-        <button class="btn-shift" onclick="handoverShift()">🤝 تسليم الشيفت</button>
         <button class="btn-end" onclick="endDay()">🛑 إنهاء اليوم</button>
     </div>
 
@@ -1622,5 +1621,29 @@ if (typeof SYNC_KEYS !== 'undefined') {
     if (idx !== -1) SYNC_KEYS.splice(idx, 1);
 }
         </script>
+    <script>
+/* ==== إصلاح: تحديث اليوم المفتوح فورًا لما ترجع من وضع تعديل يوم قديم ==== */
+function forceResyncActiveItems() {
+    if (!activeItemsColRef) return;
+    activeItemsColRef.get().then(function (snap) {
+        applyingRemoteItemChange = true;
+        ['caf', 'baz', 'stf', 'exp'].forEach(function (cat) {
+            const list = document.getElementById('list-' + cat);
+            if (list) list.innerHTML = '';
+        });
+        recalculateAllTotals();
+        setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+        snap.forEach(function (doc) { applyRemoteItemAdded(doc.id, doc.data()); });
+    }).catch(function (err) { console.error('Resync error:', err); });
+}
+
+if (typeof cancelEdit === 'function') {
+    const _origCancelEdit = cancelEdit;
+    cancelEdit = function () {
+        _origCancelEdit();
+        forceResyncActiveItems();
+    };
+}
+</script>
 </body>
 </html>
