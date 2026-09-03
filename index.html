@@ -1440,5 +1440,187 @@ function applyRemoteData(data) {
     applyingRemote = false;
 }
     </script>
+    <script>
+/* ============================================================
+   كل صنف في اليوم المفتوح بقى بيتزامن لوحده منفصل — مش كلقطة واحدة.
+   كده جهازين يضيفوا في نفس اللحظة من غير ما حد يمسح تعديل التاني.
+   ============================================================ */
+
+let applyingRemoteItemChange = false;
+let activeItemsColRef = null;
+
+function genSyncId() { return 'i' + Date.now() + Math.random().toString(36).slice(2, 8); }
+
+function buildItemLi(category, id, price, note, paid) {
+    const li = document.createElement('li');
+    li.setAttribute('data-price', price);
+    li.setAttribute('data-note', note);
+    li.setAttribute('data-sync-id', id);
+    if (category === 'exp') {
+        li.innerHTML = '<div class="item-details"><span class="item-text" style="color:#e74c3c;">- <span class="price-val">' + price + '</span> ' + (note ? '(' + note + ')' : '') + '</span></div><span class="del" onclick="removeEntry(this)">×</span>';
+    } else {
+        const chk = paid ? 'checked="checked"' : '';
+        const sty = paid ? 'text-decoration:line-through;color:#bdc3c7;' : 'color:#2c3e50;';
+        li.innerHTML = '<div class="item-details"><input type="checkbox" class="paid-check" onchange="togglePaid(this, \'' + category + '\')" ' + chk + '><span class="item-text" style="' + sty + '"><span class="price-val">' + price + '</span> ' + (note ? '(' + note + ')' : '') + '</span></div><span class="del" onclick="removeEntry(this)">×</span>';
+    }
+    return li;
+}
+
+function pushNewItem(category, li) {
+    if (!activeItemsColRef || applyingRemoteItemChange) return;
+    const id = genSyncId();
+    li.setAttribute('data-sync-id', id);
+    const price = parseFloat(li.getAttribute('data-price')) || 0;
+    const note = li.getAttribute('data-note') || '';
+    const cb = li.querySelector('.paid-check');
+    const paid = cb ? cb.checked : true;
+    activeItemsColRef.doc(id).set({ category: category, price: price, note: note, paid: paid, order: Date.now() })
+        .catch(function (err) { console.error('Item push error:', err); });
+}
+
+function pushItemUpdate(li) {
+    if (!activeItemsColRef || applyingRemoteItemChange) return;
+    const id = li.getAttribute('data-sync-id');
+    if (!id) return;
+    const price = parseFloat(li.getAttribute('data-price')) || 0;
+    const cb = li.querySelector('.paid-check');
+    const paid = cb ? cb.checked : true;
+    activeItemsColRef.doc(id).set({ price: price, paid: paid }, { merge: true })
+        .catch(function (err) { console.error('Item update error:', err); });
+}
+
+function pushItemDelete(id) {
+    if (!activeItemsColRef || applyingRemoteItemChange || !id) return;
+    activeItemsColRef.doc(id).delete().catch(function (err) { console.error('Item delete error:', err); });
+}
+
+function setupListObserver(category) {
+    const list = document.getElementById('list-' + category);
+    if (!list) return;
+    const observer = new MutationObserver(function (mutations) {
+        if (applyingRemoteItemChange) return;
+        mutations.forEach(function (m) {
+            if (m.type === 'childList') {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1 && node.tagName === 'LI' && !node.getAttribute('data-sync-id')) {
+                        pushNewItem(category, node);
+                    }
+                });
+                m.removedNodes.forEach(function (node) {
+                    if (node.nodeType === 1 && node.tagName === 'LI') {
+                        const id = node.getAttribute('data-sync-id');
+                        if (id) pushItemDelete(id);
+                    }
+                });
+            } else if (m.type === 'attributes' && m.target.tagName === 'LI') {
+                pushItemUpdate(m.target);
+            } else if (m.type === 'attributes' && m.target.classList && m.target.classList.contains('paid-check')) {
+                const li = m.target.closest('li');
+                if (li) pushItemUpdate(li);
+            }
+        });
+    });
+    observer.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-price', 'checked'] });
+}
+
+function applyRemoteItemAdded(id, data) {
+    if (typeof editingMode !== 'undefined' && editingMode) return;
+    const list = document.getElementById('list-' + data.category);
+    if (!list || list.querySelector('[data-sync-id="' + id + '"]')) return;
+    applyingRemoteItemChange = true;
+    list.appendChild(buildItemLi(data.category, id, data.price, data.note, data.paid));
+    recalculateAllTotals();
+    saveActiveState();
+    setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+}
+
+function applyRemoteItemModified(id, data) {
+    if (typeof editingMode !== 'undefined' && editingMode) return;
+    const list = document.getElementById('list-' + data.category);
+    const li = list ? list.querySelector('[data-sync-id="' + id + '"]') : null;
+    if (!li) { applyRemoteItemAdded(id, data); return; }
+    applyingRemoteItemChange = true;
+    li.setAttribute('data-price', data.price);
+    const priceVal = li.querySelector('.price-val');
+    if (priceVal) priceVal.innerText = data.price;
+    const cb = li.querySelector('.paid-check');
+    if (cb) {
+        cb.checked = !!data.paid;
+        const t = li.querySelector('.item-text');
+        if (data.paid) { t.style.textDecoration = 'line-through'; t.style.color = '#bdc3c7'; cb.setAttribute('checked', 'checked'); }
+        else { t.style.textDecoration = 'none'; t.style.color = '#2c3e50'; cb.removeAttribute('checked'); }
+    }
+    recalculateAllTotals();
+    saveActiveState();
+    setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+}
+
+function applyRemoteItemRemoved(id, category) {
+    if (typeof editingMode !== 'undefined' && editingMode) return;
+    const list = document.getElementById('list-' + category);
+    const li = list ? list.querySelector('[data-sync-id="' + id + '"]') : null;
+    if (!li) return;
+    applyingRemoteItemChange = true;
+    li.remove();
+    recalculateAllTotals();
+    saveActiveState();
+    setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+}
+
+function initActiveItemsSync() {
+    if (!CLOUD_SYNC_ENABLED) return;
+    if (!shopDocRef) { setTimeout(initActiveItemsSync, 1000); return; }
+    activeItemsColRef = shopDocRef.collection('activeItems');
+    ['caf', 'baz', 'stf', 'exp'].forEach(setupListObserver);
+
+    activeItemsColRef.get().then(function (snap) {
+        if (snap.empty) {
+            applyingRemoteItemChange = true;
+            ['caf', 'baz', 'stf', 'exp'].forEach(function (cat) {
+                const list = document.getElementById('list-' + cat);
+                if (!list) return;
+                Array.from(list.querySelectorAll('li')).forEach(function (li) {
+                    if (!li.getAttribute('data-sync-id')) {
+                        const id = genSyncId();
+                        li.setAttribute('data-sync-id', id);
+                        const price = parseFloat(li.getAttribute('data-price')) || 0;
+                        const note = li.getAttribute('data-note') || '';
+                        const cb = li.querySelector('.paid-check');
+                        const paid = cb ? cb.checked : true;
+                        activeItemsColRef.doc(id).set({ category: cat, price: price, note: note, paid: paid, order: Date.now() });
+                    }
+                });
+            });
+            setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+        } else {
+            applyingRemoteItemChange = true;
+            ['caf', 'baz', 'stf', 'exp'].forEach(function (cat) {
+                const list = document.getElementById('list-' + cat);
+                if (list) list.innerHTML = '';
+            });
+            recalculateAllTotals();
+            setTimeout(function () { applyingRemoteItemChange = false; }, 0);
+        }
+
+        activeItemsColRef.onSnapshot({ includeMetadataChanges: true }, function (liveSnap) {
+            if (liveSnap.metadata.hasPendingWrites) return;
+            liveSnap.docChanges().forEach(function (change) {
+                const data = change.doc.data();
+                if (change.type === 'added') applyRemoteItemAdded(change.doc.id, data);
+                else if (change.type === 'modified') applyRemoteItemModified(change.doc.id, data);
+                else if (change.type === 'removed') applyRemoteItemRemoved(change.doc.id, data.category);
+            });
+        });
+    }).catch(function (err) { console.error('Active items init error:', err); });
+}
+
+window.addEventListener('load', function () { setTimeout(initActiveItemsSync, 1500); });
+
+// شيل activeDayData من نظام المزامنة القديم عشان يبقى الجديد هو المسؤول لوحده
+if (typeof SYNC_KEYS !== 'undefined') {
+    const idx = SYNC_KEYS.indexOf('activeDayData');
+    if (idx !== -1) SYNC_KEYS.splice(idx, 1);
+}
+        </script>
 </body>
 </html>
