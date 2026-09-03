@@ -1117,6 +1117,22 @@ function migrateHistoryIfNeeded() {
         });
     }).catch(function (err) { console.error('Migration error:', err); });
 }
+                for (let i = 0; i < oldHistory.length; i += CHUNK) {
+                    const batch = db.batch();
+                    oldHistory.slice(i, i + CHUNK).forEach(function (record, j) {
+                        batch.set(historyCol.doc(), Object.assign({}, record, { order: i + j }));
+                    });
+                    commits.push(batch.commit());
+                }
+                return Promise.all(commits).then(function () {
+                    return shopDocRef.update({ shopHistory: firebase.firestore.FieldValue.delete() });
+                }).then(function () {
+                    console.log('تم ترحيل السجل القديم بنجاح');
+                });
+            });
+        });
+    }).catch(function (err) { console.error('Migration error:', err); });
+}
 function applyRemoteData(data) {
     applyingRemote = true;
     SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; }).forEach(function (k) {
