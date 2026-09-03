@@ -918,45 +918,77 @@ if (typeof restoreHistoryItem === 'function') {
     <script>
 /* ==== ترقية تخزين السجل: كل يوم/شيفت في مستند منفصل بدل ما يكونوا كلهم في مستند واحد ====
    ده بيشيل ليميت الـ 1 ميجابايت للمستند الواحد نهائيًا */
+<script>
+/* ==== إصلاح: حفظ السجل بالتتابع (مش في نفس الوقت) عشان منمنعش تلخبط لما نقفل أكتر من يوم بسرعة ==== */
+let historyPushChain = Promise.resolve();
 
-let historyPushTimer = null;
+function doPushHistory() {
+    const history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+    const historyCol = shopDocRef.collection('history');
+    const db = shopDocRef.firestore;
+    return historyCol.get().then(function (snap) {
+        const ops = [];
+        snap.docs.forEach(function (d) { ops.push({ type: 'delete', ref: d.ref }); });
+        history.forEach(function (record, idx) {
+            ops.push({ type: 'set', ref: historyCol.doc(), data: Object.assign({}, record, { order: idx }) });
+        });
+        const CHUNK = 400;
+        const commits = [];
+        for (let i = 0; i < ops.length; i += CHUNK) {
+            const batch = db.batch();
+            ops.slice(i, i + CHUNK).forEach(function (op) {
+                if (op.type === 'delete') batch.delete(op.ref);
+                else batch.set(op.ref, op.data);
+            });
+            commits.push(batch.commit());
+        }
+        return Promise.all(commits);
+    });
+}
 
 function pushHistoryToCloud() {
     if (!CLOUD_SYNC_ENABLED || !shopDocRef || applyingRemote) return;
     clearTimeout(historyPushTimer);
     historyPushTimer = setTimeout(function () {
-        const history = JSON.parse(localStorage.getItem('shopHistory')) || [];
-        const historyCol = shopDocRef.collection('history');
-        historyCol.get().then(function (snap) {
-            return Promise.all(snap.docs.map(function (d) { return d.ref.delete(); }));
-        }).then(function () {
-            return Promise.all(history.map(function (record, idx) {
-                return historyCol.add(Object.assign({}, record, { order: idx }));
-            }));
+        historyPushChain = historyPushChain.then(function () {
+            return doPushHistory();
         }).catch(function (err) { console.error('History sync error:', err); });
     }, 800);
 }
 
 function migrateHistoryIfNeeded() {
     if (!shopDocRef) return;
-    shopDocRef.get().then(function (doc) {
-        if (!doc.exists) return;
-        const data = doc.data();
-        if (!data.shopHistory) return;
-        const historyCol = shopDocRef.collection('history');
-        historyCol.limit(1).get().then(function (existing) {
-            if (!existing.empty) return;
-            let oldHistory = [];
-            try { oldHistory = JSON.parse(data.shopHistory); } catch (e) { oldHistory = []; }
-            Promise.all(oldHistory.map(function (record, idx) {
-                return historyCol.add(Object.assign({}, record, { order: idx }));
-            })).then(function () {
-                return shopDocRef.update({ shopHistory: firebase.firestore.FieldValue.delete() });
-            }).then(function () {
-                console.log('تم ترحيل السجل القديم بنجاح');
-            }).catch(function (err) { console.error('Migration error:', err); });
+    historyPushChain = historyPushChain.then(function () {
+        return shopDocRef.get().then(function (doc) {
+            if (!doc.exists) return;
+            const data = doc.data();
+            if (!data.shopHistory) return;
+            const historyCol = shopDocRef.collection('history');
+            return historyCol.limit(1).get().then(function (existing) {
+                if (!existing.empty) return;
+                let oldHistory = [];
+                try { oldHistory = JSON.parse(data.shopHistory); } catch (e) { oldHistory = []; }
+                const db = shopDocRef.firestore;
+                const CHUNK = 400;
+                const commits = [];
+                for (let i = 0; i < oldHistory.length; i += CHUNK) {
+                    const batch = db.batch();
+                    oldHistory.slice(i, i + CHUNK).forEach(function (record, j) {
+                        batch.set(historyCol.doc(), Object.assign({}, record, { order: i + j }));
+                    });
+                    commits.push(batch.commit());
+                }
+                return Promise.all(commits).then(function () {
+                    return shopDocRef.update({ shopHistory: firebase.firestore.FieldValue.delete() });
+                }).then(function () {
+                    console.log('تم ترحيل السجل القديم بنجاح');
+                });
+            });
         });
-    }).catch(function (err) { console.error('Migration check error:', err); });
+    }).catch(function (err) { console.error('Migration error:', err); });
+}
+</script>
+
 }
 
 function applyRemoteData(data) {
