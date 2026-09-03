@@ -1049,6 +1049,7 @@ if (typeof restoreHistoryItem === 'function') {
 /* ==== ترقية تخزين السجل: كل يوم/شيفت في مستند منفصل بدل ما يكونوا كلهم في مستند واحد ====
    ده بيشيل ليميت الـ 1 ميجابايت للمستند الواحد نهائيًا */
 /* ==== إصلاح: حفظ السجل بالتتابع (مش في نفس الوقت) عشان منمنعش تلخبط لما نقفل أكتر من يوم بسرعة ==== */
+let historyPushTimer;    
 let historyPushChain = Promise.resolve();
 
 function doPushHistory() {
