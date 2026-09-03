@@ -458,48 +458,174 @@
         }
 
         function endDay() {
-            if(confirm('هل تريد إنهاء اليوم وتأكيد الترحيل وتصفير الدفتر؟')) {
-                document.querySelectorAll('#list-stf li').forEach(li => { let cb = li.querySelector('.paid-check'); if(cb && !cb.checked){ let n = li.getAttribute('data-note')||"بدون اسم", p = parseFloat(li.getAttribute('data-price'))||0; if(p>0){ let e = persistentUnpaid.find(d=>d.name===n); e?e.amount+=p:persistentUnpaid.push({name:n,amount:p}); } } });
+            if (confirm('هل تريد إنهاء اليوم وتأكيد الترحيل وتصفير الدفتر؟')) {
+                document.querySelectorAll('#list-stf li').forEach(li => {
+                    let cb = li.querySelector('.paid-check');
+                    if (cb && !cb.checked) {
+                        let n = li.getAttribute('data-note') || "بدون اسم";
+                        let p = parseFloat(li.getAttribute('data-price')) || 0;
+                        if (p > 0) {
+                            let e = persistentUnpaid.find(d => d.name === n);
+                            if (e) { e.amount += p; }
+                            else { persistentUnpaid.push({ name: n, amount: p }); }
+                        }
+                    }
+                });
                 saveUnpaidDebts();
-                let now = new Date(); let ds = now.toLocaleDateString('ar-EG') + " " + now.toLocaleTimeString('ar-EG');
+                
+                let now = new Date();
+                let ds = now.toLocaleDateString('ar-EG') + " " + now.toLocaleTimeString('ar-EG');
                 let history = JSON.parse(localStorage.getItem('shopHistory')) || [];
                 history.push(getRecordObj(ds + " (تقفيل يومي)", "day"));
                 localStorage.setItem('shopHistory', JSON.stringify(history));
-                clearWorkspace(); saveActiveState(); loadHistory(); alert("تم إنهاء اليوم وتصفير الدفتر!");
+                
+                clearWorkspace();
+                saveActiveState();
+                loadHistory();
+                alert("تم إنهاء اليوم وتصفير الدفتر!");
             }
         }
 
         function loadHistory() {
-            let history = JSON.parse(localStorage.getItem('shopHistory')) || []; let c = document.getElementById('history-container'); c.innerHTML='';
+            let history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+            let c = document.getElementById('history-container');
+            if (!c) return;
+            c.innerHTML = '';
+            
             history.slice().reverse().forEach((r, idx) => {
                 let origIdx = history.length - 1 - idx;
                 let bg = r.type === "shift" ? "#fff9e6" : "#ffffff";
                 let border = r.type === "shift" ? "5px solid #f1c40f" : "5px solid #2ecc71";
                 
                 c.innerHTML += `
-                    <div style="background:${bg}; padding:15px; border-radius:12px; border-right:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                    <div style="background:${bg}; padding:15px; border-radius:12px; border-right:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom:15px;">
                         <h4 style="margin:0 0 10px 0; color:#2c3e50;">${r.date}</h4>
                         <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; font-size:14px;">
-                            <span>إيرادات: <b style="color:#27ae60">${r.income}</b></span> | <span>مصروفات: <b style="color:#e74c3c">${r.expenses}</b></span> | <span style="font-weight:bold; font-size:16px;">الصافي: ${r.net}</span>
+                            <span>إيرادات: <b style="color:#27ae60">${r.income}</b></span> | 
+                            <span>مصروفات: <b style="color:#e74c3c">${r.expenses}</b></span> | 
+                            <span style="font-weight:bold; font-size:16px;">الصافي: ${r.net}</span>
                         </div>
                         <div style="margin-top:15px; display:flex; gap:8px; flex-wrap:wrap;">
-                            <button onclick="generateWhatsAppImage(${origIdx})" style="background:#25D366; color:white; padding:8px 12px; border-radius:8px; flex:1;">📸 صورة للواتساب</button>
-                            ${r.type === "day" ? `<button onclick="restoreHistoryItem(${origIdx})" style="background:#f39c12; color:white; padding:8px 12px; border-radius:8px; flex:1;">تعديل</button>` : ''}
-                            <button onclick="deleteHistoryItem(${origIdx})" style="background:#e74c3c; color:white; padding:8px 12px; border-radius:8px; flex:1;">حذف</button>
+                            <button onclick="generateWhatsAppImage(${origIdx})" style="background:#25D366; color:white; padding:8px 12px; border-radius:8px; flex:1; border:none; cursor:pointer;">📸 صورة للواتساب</button>
+                            ${r.type === "day" ? `<button onclick="restoreHistoryItem(${origIdx})" style="background:#f39c12; color:white; padding:8px 12px; border-radius:8px; flex:1; border:none; cursor:pointer;">تعديل</button>` : ''}
+                            <button onclick="deleteHistoryItem(${origIdx})" style="background:#e74c3c; color:white; padding:8px 12px; border-radius:8px; flex:1; border:none; cursor:pointer;">حذف</button>
                         </div>
                     </div>`;
             });
         }
-        
-        function showWhatsAppQR(i) { let r = (JSON.parse(localStorage.getItem('shopHistory')))[i]; let t = `📅 *${r.date}*\n☕ كافتيريا: ${r.caf}\n🍫 بازار: ${r.baz}\n👥 اصطف: ${r.stf}\n💸 مصروفات: ${r.expenses}\n💰 *الصافي: ${r.net} ج.م*`; document.getElementById('qrModal').style.display='block'; document.getElementById('qr-container').innerHTML=''; new QRCode(document.getElementById("qr-container"), {text: `https://wa.me/?text=${encodeURIComponent(t)}`, width:220, height:220}); }
-        function deleteHistoryItem(i) { if(confirm('حذف السجل؟')){ let h = JSON.parse(localStorage.getItem('shopHistory')); h.splice(i,1); localStorage.setItem('shopHistory', JSON.stringify(h)); loadHistory(); } }
-        function restoreHistoryItem(i) { let h=JSON.parse(localStorage.getItem('shopHistory')); let r=h[i]; ['caf','baz','stf','exp'].forEach(c=>document.getElementById('list-'+c).innerHTML=r[c+'List']); recalculateAllTotals(); editingMode=true; editingIndex=i; editingDate=r.date; document.getElementById('edit-mode-banner').style.display='block'; document.getElementById('edit-date-display').innerText=editingDate; document.getElementById('normal-footer').style.display='none'; window.scrollTo({ top: 0, behavior: 'smooth' }); }
-        function cancelEdit() { editingMode=false; editingIndex=-1; document.getElementById('edit-mode-banner').style.display='none'; document.getElementById('normal-footer').style.display='flex'; clearWorkspace(); loadActiveState(); }
-        function saveEditedDay() { let h=JSON.parse(localStorage.getItem('shopHistory')); h[editingIndex]=getRecordObj(editingDate, "day"); localStorage.setItem('shopHistory', JSON.stringify(h)); cancelEdit(); loadHistory(); alert("تم التعديل بنجاح!"); }
 
-        function openSortModal(t) { currentSortType=t; let l=document.getElementById('sort-list'); l.innerHTML=''; let arr = t==='caf'?Object.keys(cafMenu):staffNames; arr.forEach(x => { l.innerHTML += `<li style="padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:8px; background:#f8f9fa; display:flex; justify-content:space-between; align-items:center;" data-id="${x}"><b>${x}</b> <div><button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px;" onclick="this.closest('li').previousElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li'), this.closest('li').previousElementSibling)">⬆️</button> <button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px;" onclick="this.closest('li').nextElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li').nextElementSibling, this.closest('li'))">⬇️</button></div></li>`; }); document.getElementById('sortModal').style.display='block'; }
-        function closeSortModal() { document.getElementById('sortModal').style.display='none'; }
-        function saveSort() { let n=[]; document.querySelectorAll('#sort-list li').forEach(li=>n.push(li.getAttribute('data-id'))); if(currentSortType==='caf'){ let nm={}; n.forEach(k=>nm[k]=cafMenu[k]); cafMenu=nm; localStorage.setItem('cafMenuData',JSON.stringify(cafMenu)); renderCafDropdown(); }else{ staffNames=n; localStorage.setItem('staffNamesData',JSON.stringify(staffNames)); renderStaffList(); } closeSortModal(); }
+        function showWhatsAppQR(i) {
+            let history = JSON.parse(localStorage.getItem('shopHistory')) || [];
+            let r = history[i];
+            if (!r) return;
+            let t = `📅 *${r.date}*\n☕ كافتيريا: ${r.caf}\n🍫 بازار: ${r.baz}\n👥 اصطف: ${r.stf}\n💸 مصروفات: ${r.expenses}\n💰 *الصافي: ${r.net} ج.م*`;
+            let modal = document.getElementById('qrModal');
+            let container = document.getElementById('qr-container');
+            if (modal && container) {
+                modal.style.display = 'block';
+                container.innerHTML = '';
+                new QRCode(container, { text: `https://wa.me/?text=${encodeURIComponent(t)}`, width: 220, height: 220 });
+            }
+        }
+
+        function deleteHistoryItem(i) {
+            if (confirm('هل أنت تأكد من حذف السجل؟')) {
+                let h = JSON.parse(localStorage.getItem('shopHistory')) || [];
+                h.splice(i, 1);
+                localStorage.setItem('shopHistory', JSON.stringify(h));
+                loadHistory();
+            }
+        }
+
+        function restoreHistoryItem(i) {
+            let h = JSON.parse(localStorage.getItem('shopHistory')) || [];
+            let r = h[i];
+            if (!r) return;
+            
+            ['caf', 'baz', 'stf', 'exp'].forEach(c => {
+                let el = document.getElementById('list-' + c);
+                if (el) el.innerHTML = r[c + 'List'] || '';
+            });
+            
+            recalculateAllTotals();
+            editingMode = true;
+            editingIndex = i;
+            editingDate = r.date;
+            
+            let banner = document.getElementById('edit-mode-banner');
+            let dateDisp = document.getElementById('edit-date-display');
+            let footer = document.getElementById('normal-footer');
+            
+            if (banner) banner.style.display = 'block';
+            if (dateDisp) dateDisp.innerText = editingDate;
+            if (footer) footer.style.display = 'none';
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingMode = false;
+            editingIndex = -1;
+            let banner = document.getElementById('edit-mode-banner');
+            let footer = document.getElementById('normal-footer');
+            if (banner) banner.style.display = 'none';
+            if (footer) footer.style.display = 'flex';
+            clearWorkspace();
+            loadActiveState();
+        }
+
+        function saveEditedDay() {
+            let h = JSON.parse(localStorage.getItem('shopHistory')) || [];
+            if (editingIndex >= 0 && editingIndex < h.length) {
+                h[editingIndex] = getRecordObj(editingDate, "day");
+                localStorage.setItem('shopHistory', JSON.stringify(h));
+            }
+            cancelEdit();
+            loadHistory();
+            alert("تم التعديل بنجاح!");
+        }
+
+        function openSortModal(t) {
+            currentSortType = t;
+            let l = document.getElementById('sort-list');
+            if (!l) return;
+            l.innerHTML = '';
+            let arr = t === 'caf' ? Object.keys(cafMenu) : staffNames;
+            arr.forEach(x => {
+                l.innerHTML += `
+                    <li style="padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:8px; background:#f8f9fa; display:flex; justify-content:space-between; align-items:center;" data-id="${x}">
+                        <b>${x}</b>
+                        <div>
+                            <button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px; border:none; cursor:pointer;" onclick="this.closest('li').previousElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li'), this.closest('li').previousElementSibling)">⬆️</button>
+                            <button style="background:#bdc3c7; color:#333; padding:5px 10px; border-radius:5px; border:none; cursor:pointer;" onclick="this.closest('li').nextElementSibling && this.closest('li').parentNode.insertBefore(this.closest('li').nextElementSibling, this.closest('li'))">⬇️</button>
+                        </div>
+                    </li>`;
+            });
+            let modal = document.getElementById('sortModal');
+            if (modal) modal.style.display = 'block';
+        }
+
+        function closeSortModal() {
+            let modal = document.getElementById('sortModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function saveSort() {
+            let n = [];
+            document.querySelectorAll('#sort-list li').forEach(li => n.push(li.getAttribute('data-id')));
+            if (currentSortType === 'caf') {
+                let nm = {};
+                n.forEach(k => nm[k] = cafMenu[k]);
+                cafMenu = nm;
+                localStorage.setItem('cafMenuData', JSON.stringify(cafMenu));
+                renderCafDropdown();
+            } else {
+                staffNames = n;
+                localStorage.setItem('staffNamesData', JSON.stringify(staffNames));
+                renderStaffList();
+            }
+            closeSortModal();
+        }
     </script>
     <!-- Firebase (لتفعيل الربط بين التليفونات) -->
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
