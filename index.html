@@ -1409,5 +1409,36 @@ function initPresence() {
 
 window.addEventListener('load', function () { setTimeout(initPresence, 1200); });
 </script>
+    <script>
+/* ==== إصلاح: تحديث الحاجة اللي اتغيّرت بس، عشان قائمة "اختر صنف" منترجعش لأول اختيار وانت بتستخدمها ==== */
+let lastAppliedValues = {};
+
+function applyRemoteData(data) {
+    applyingRemote = true;
+    const relevantKeys = SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; });
+    const changedKeys = [];
+    relevantKeys.forEach(function (k) {
+        if (data[k] !== undefined && data[k] !== lastAppliedValues[k]) {
+            localStorage.setItem(k, data[k]);
+            lastAppliedValues[k] = data[k];
+            changedKeys.push(k);
+        }
+    });
+
+    if (changedKeys.indexOf('cafMenuData') !== -1) loadCafMenu();
+    if (changedKeys.indexOf('staffNamesData') !== -1) loadStaffNames();
+    if (changedKeys.indexOf('persistentUnpaidDebts') !== -1) loadUnpaidDebts();
+    if (changedKeys.indexOf('supplierInvoices') !== -1 && typeof loadSupplierInvoices === 'function') loadSupplierInvoices();
+    if (changedKeys.indexOf('paidInvoicesHistory') !== -1) {
+        const modal = document.getElementById('invoiceHistoryModal');
+        if (modal && modal.style.display === 'block' && typeof renderInvoiceHistoryModal === 'function') renderInvoiceHistoryModal();
+    }
+    if (changedKeys.indexOf('activeDayData') !== -1 && (typeof editingMode === 'undefined' || !editingMode)) {
+        loadActiveState();
+    }
+
+    applyingRemote = false;
+}
+    </script>
 </body>
 </html>
