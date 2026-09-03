@@ -1115,6 +1115,7 @@ function migrateHistoryIfNeeded() {
             });
         });
     }).catch(function (err) { console.error('Migration error:', err); });
+    }
 function applyRemoteData(data) {
     applyingRemote = true;
     SYNC_KEYS.filter(function (k) { return k !== 'shopHistory'; }).forEach(function (k) {
