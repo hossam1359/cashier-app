@@ -1618,9 +1618,10 @@ function pushItemDelete(id) {
 }
 
 function setupListObserver(category) {
-    if (applyingRemoteItemChange || (typeof editingMode !== 'undefined' && editingMode)) return;
+    const list = document.getElementById('list-' + category);
+    if (!list) return;
     const observer = new MutationObserver(function (mutations) {
-        if (applyingRemoteItemChange) return;
+        if (applyingRemoteItemChange || (typeof editingMode !== 'undefined' && editingMode)) return;
         mutations.forEach(function (m) {
             if (m.type === 'childList') {
                 m.addedNodes.forEach(function (node) {
