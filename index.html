@@ -1618,8 +1618,7 @@ function pushItemDelete(id) {
 }
 
 function setupListObserver(category) {
-    const list = document.getElementById('list-' + category);
-    if (!list) return;
+    if (applyingRemoteItemChange || (typeof editingMode !== 'undefined' && editingMode)) return;
     const observer = new MutationObserver(function (mutations) {
         if (applyingRemoteItemChange) return;
         mutations.forEach(function (m) {
